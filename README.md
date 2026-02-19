@@ -101,3 +101,8 @@ sorter-coto-precio/
 ## Licencia
 
 MIT
+
+
+HOW TO ZIP IT for firefox:
+
+zip -r extension.zip manifest.json content.js styles.css icons/ popup/ -x "*.git*"
