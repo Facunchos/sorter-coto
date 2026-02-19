@@ -7,7 +7,7 @@
 
   // ---- State ----
   let isSorting = false;
-  let currentFilter = null; // null | "weight" | "volume"
+  let currentFilter = null; // null | "weight" | "volume" | "100g" | "square" | "unit"
   const originalOrder = new Map(); // wrapper element -> original index
   let originalOrderSaved = false;
   let debugEnabled = false;
@@ -19,7 +19,9 @@
   const BADGE_CLASS = "coto-sorter-badge";
   const BADGE_ATTR = "data-coto-sorter-processed";
   const UNIT_PRICE_REGEX =
-    /Precio\s+por\s+1\s+(Kilo(?:gramo)?(?:\s+escurrido)?|Litro)\s*:\s*\$([\d\.,]+)/i;
+    /Precio\s+por\s+(?:1|100)\s+(Kilo(?:gramo)?(?:\s+escurrido)?|Litro|[Gg]ramos?|[Cc]uadrado|[Uu]nidad)\s*:\s*\$([\d\.,]+)/i;
+  const UNIT_QTY_REGEX =
+    /Precio\s+por\s+(1|100)\s+/i;
 
   // ---- Debug Logging ----
 
@@ -73,14 +75,20 @@
   // ---- Unit Type Normalizer ----
 
   /**
-   * Normalizes unit text to "weight" or "volume".
+   * Normalizes unit text to a filter category.
    * "Kilo", "Kilogramo", "Kilogramo escurrido" -> "weight"
    * "Litro" -> "volume"
+   * "Gramos", "Gramo" (when qty=100) -> "100g"
+   * "Cuadrado" -> "square"
+   * "Unidad" -> "unit"
    */
-  function normalizeUnitType(unitText) {
+  function normalizeUnitType(unitText, qty) {
     const lower = unitText.toLowerCase().trim();
     if (lower.startsWith("kilo")) return "weight";
     if (lower.startsWith("litro")) return "volume";
+    if (lower.startsWith("gramo") && qty === "100") return "100g";
+    if (lower.startsWith("cuadrado")) return "square";
+    if (lower.startsWith("unidad")) return "unit";
     return null;
   }
 
@@ -88,7 +96,14 @@
    * Returns display label for the unit type.
    */
   function unitLabel(unitType) {
-    return unitType === "weight" ? "kg" : unitType === "volume" ? "L" : "?";
+    switch (unitType) {
+      case "weight":  return "kg";
+      case "volume":  return "L";
+      case "100g":    return "100g";
+      case "square":  return "m²";
+      case "unit":    return "u";
+      default:        return "?";
+    }
   }
 
   // ---- Product Data Extraction ----
@@ -102,20 +117,24 @@
     const smalls = productEl.querySelectorAll("small");
     let unitMatch = null;
 
+    let qtyStr = "1"; // default quantity prefix
     for (const small of smalls) {
       const text = small.textContent || small.innerText || "";
       const match = text.match(UNIT_PRICE_REGEX);
       if (match) {
         unitMatch = match;
+        // Extract the quantity (1 or 100) from the same text
+        const qtyMatch = text.match(UNIT_QTY_REGEX);
+        if (qtyMatch) qtyStr = qtyMatch[1];
         break;
       }
     }
 
     if (!unitMatch) return null;
 
-    const rawUnitType = unitMatch[1];         // e.g. "Kilogramo escurrido"
+    const rawUnitType = unitMatch[1];         // e.g. "Kilogramo escurrido", "Gramos", "Cuadrado"
     const rawUnitPrice = unitMatch[2];        // e.g. "3.012,32"
-    const type = normalizeUnitType(rawUnitType);
+    const type = normalizeUnitType(rawUnitType, qtyStr);
     if (!type) return null;
 
     const listedUnitPrice = parsePrice(rawUnitPrice);
@@ -420,15 +439,25 @@
   // ---- UI Injection ----
 
   let panelEl = null;
-  let btnWeight = null;
-  let btnVolume = null;
+  const filterButtons = {}; // key -> button element
   let btnReset = null;
 
-  function updateButtonStates() {
-    if (!btnWeight || !btnVolume || !btnReset) return;
+  // All available filter types with labels
+  const FILTER_TYPES = [
+    { key: "weight",  label: "Ordenar $/Kg ↑",     title: "Ordenar por precio real por kilogramo" },
+    { key: "volume",  label: "Ordenar $/L ↑",      title: "Ordenar por precio real por litro" },
+    { key: "100g",    label: "Ordenar $/100g ↑",   title: "Ordenar por precio por 100 gramos" },
+    { key: "square",  label: "Ordenar $/m² ↑",     title: "Ordenar por precio por cuadrado" },
+    { key: "unit",    label: "Ordenar $/Unidad ↑", title: "Ordenar por precio por unidad" },
+  ];
 
-    btnWeight.classList.toggle("coto-sorter-active", currentFilter === "weight");
-    btnVolume.classList.toggle("coto-sorter-active", currentFilter === "volume");
+  function updateButtonStates() {
+    for (const ft of FILTER_TYPES) {
+      const btn = filterButtons[ft.key];
+      if (btn) {
+        btn.classList.toggle("coto-sorter-active", currentFilter === ft.key);
+      }
+    }
   }
 
   function injectUI() {
@@ -464,23 +493,19 @@
     const buttons = document.createElement("div");
     buttons.className = "coto-sorter-buttons";
 
-    btnWeight = document.createElement("button");
-    btnWeight.className = "coto-sorter-btn";
-    btnWeight.textContent = "Ordenar $/Kg ↑";
-    btnWeight.title = "Ordenar por precio real por kilogramo (menor a mayor)";
-    btnWeight.addEventListener("click", () => {
-      debugLog("Button clicked: Sort by weight");
-      sortProducts("weight");
-    });
-
-    btnVolume = document.createElement("button");
-    btnVolume.className = "coto-sorter-btn";
-    btnVolume.textContent = "Ordenar $/L ↑";
-    btnVolume.title = "Ordenar por precio real por litro (menor a mayor)";
-    btnVolume.addEventListener("click", () => {
-      debugLog("Button clicked: Sort by volume");
-      sortProducts("volume");
-    });
+    // Create a button for each filter type
+    for (const ft of FILTER_TYPES) {
+      const btn = document.createElement("button");
+      btn.className = "coto-sorter-btn";
+      btn.textContent = ft.label;
+      btn.title = ft.title + " (menor a mayor)";
+      btn.addEventListener("click", () => {
+        debugLog(`Button clicked: Sort by ${ft.key}`);
+        sortProducts(ft.key);
+      });
+      filterButtons[ft.key] = btn;
+      buttons.appendChild(btn);
+    }
 
     btnReset = document.createElement("button");
     btnReset.className = "coto-sorter-btn coto-sorter-btn-reset";
@@ -491,8 +516,6 @@
       resetOrder();
     });
 
-    buttons.appendChild(btnWeight);
-    buttons.appendChild(btnVolume);
     buttons.appendChild(btnReset);
 
     panelEl.appendChild(header);
