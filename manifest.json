@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Coto Sorter - Precio por Unidad",
+  "version": "1.0.0",
+  "description": "Ordena productos de Coto Digital por precio real por kilo o litro, considerando descuentos y promos.",
+  "permissions": ["storage", "activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.cotodigital.com.ar/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "coto-sorter@sorter-coto-precio",
+      "strict_min_version": "109.0"
+    }
+  }
+}

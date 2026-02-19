@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coto Sorter</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 260px;
+      padding: 16px;
+      background: #fff;
+    }
+    h1 {
+      font-size: 15px;
+      color: #e20025;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    h1 span {
+      font-size: 18px;
+    }
+    .setting {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-top: 1px solid #eee;
+    }
+    .setting label {
+      font-size: 13px;
+      color: #333;
+      cursor: pointer;
+    }
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      border-radius: 22px;
+      transition: 0.3s;
+    }
+    .toggle .slider::before {
+      content: "";
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    .toggle input:checked + .slider {
+      background-color: #e20025;
+    }
+    .toggle input:checked + .slider::before {
+      transform: translateX(18px);
+    }
+    .info {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.5;
+    }
+    .info a {
+      color: #e20025;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1><span>🏷️</span> Coto Sorter</h1>
+
+  <div class="setting">
+    <label for="debug-toggle">Modo Debug</label>
+    <div class="toggle">
+      <input type="checkbox" id="debug-toggle">
+      <span class="slider"></span>
+    </div>
+  </div>
+
+  <div class="info">
+    Ordena productos de Coto Digital por precio real por unidad (kg/L), ajustado por descuentos y promos.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
