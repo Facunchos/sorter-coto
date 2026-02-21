@@ -1,0 +1,474 @@
+{
+  "catalog_metadata": {
+    "store_name": "COTO",
+    "catalog_title": "SÁBADO 21 DE FEBRERO",
+    "valid_from": null,
+    "valid_to": null,
+    "page_number": null,
+    "language": "es"
+  },
+  "layout": {
+    "background_color": "white",
+    "primary_colors": ["yellow", "red", "black", "white"],
+    "grid_structure": {
+      "columns": 4,
+      "rows": 4
+    }
+  },
+  "sections": [
+    {
+      "section_id": "hero_meat_poultry",
+      "section_title": "Asado y vacío de novillito",
+      "section_position": {
+        "x": 0,
+        "y": 0,
+        "width": 1,
+        "height": 1
+      },
+      "products": [
+        {
+          "product_id": "p1",
+          "product_name": "Pollo entero congelado Coto",
+          "brand": "Nuestra Granja Coto",
+          "category": "Carnicería",
+          "description": "LLEVANDO 3 KG. O MÁS",
+          "image_description": "Pollo entero en bolsa amarilla Nuestra Granja Coto",
+          "pricing": {
+            "current_price": "$2799",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": "LLEVANDO 3 KG. O MÁS"
+          },
+          "badges": [],
+          "position": {
+            "row": 1,
+            "column": 1
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p2",
+          "product_name": "Asado de novillito",
+          "brand": null,
+          "category": "Carnicería",
+          "description": "COD. 4799 - 41307",
+          "image_description": "Corte de asado crudo enrollado",
+          "pricing": {
+            "current_price": "$10999",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 1,
+            "column": 2
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p3",
+          "product_name": "Vacío de novillito",
+          "brand": null,
+          "category": "Carnicería",
+          "description": "STOCK 30.000 KG. COD. 4798 - 41350",
+          "image_description": "Corte de vacío crudo sobre tabla",
+          "pricing": {
+            "current_price": "$13999",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 1,
+            "column": 3
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p4",
+          "product_name": "Asado de bife de novillito",
+          "brand": null,
+          "category": "Carnicería",
+          "description": "COD. 41467",
+          "image_description": "Tiras de asado crudo",
+          "pricing": {
+            "current_price": "$13499",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 1,
+            "column": 4
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        }
+      ]
+    },
+    {
+      "section_id": "dry_goods_and_frozen",
+      "section_title": null,
+      "section_position": {
+        "x": 0,
+        "y": 1,
+        "width": 1,
+        "height": 1
+      },
+      "products": [
+        {
+          "product_id": "p5",
+          "product_name": "Harina de trigo 000",
+          "brand": "Morixe",
+          "category": "Almacén",
+          "description": "PAQ. X 1 KG. COD. 480052",
+          "image_description": "Bolsa de harina Morixe 000",
+          "pricing": {
+            "current_price": "$899",
+            "unit_price": "X U.",
+            "discount_percentage": 30,
+            "promotion_label": "-30%"
+          },
+          "badges": ["-30%"],
+          "position": {
+            "row": 2,
+            "column": 1
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p6",
+          "product_name": "Medallón de merluza rebozado prefrito congelado",
+          "brand": "Domecajis",
+          "category": "Congelados",
+          "description": "COD. 94544",
+          "image_description": "Medallones de merluza rebozados",
+          "pricing": {
+            "current_price": "$479",
+            "unit_price": "X 100 G.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": ["Producto sano con Omega 3"],
+          "position": {
+            "row": 2,
+            "column": 2
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p7",
+          "product_name": "Filet de merluza fresco despinado",
+          "brand": "Domecajis",
+          "category": "Pescadería",
+          "description": "COD. 278342",
+          "image_description": "Filetes de merluza frescos",
+          "pricing": {
+            "current_price": "$949",
+            "unit_price": "X 100 G.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": ["Producto sano con Omega 3"],
+          "position": {
+            "row": 2,
+            "column": 3
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p8",
+          "product_name": "Varitas de surimi congeladas",
+          "brand": null,
+          "category": "Congelados",
+          "description": "COD. 179362",
+          "image_description": "Varitas de surimi en plato",
+          "pricing": {
+            "current_price": "$1799",
+            "unit_price": "X 100 G.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 2,
+            "column": 4
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        }
+      ]
+    },
+    {
+      "section_id": "deli_and_prepared",
+      "section_title": null,
+      "section_position": {
+        "x": 0,
+        "y": 2,
+        "width": 1,
+        "height": 1
+      },
+      "products": [
+        {
+          "product_id": "p9",
+          "product_name": "Queso Por Salut",
+          "brand": "Primera Marca",
+          "category": "Lácteos",
+          "description": "COD. 163",
+          "image_description": "Queso Por Salut en horma",
+          "pricing": {
+            "current_price": "$859,90",
+            "unit_price": "X 100 G.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 3,
+            "column": 1
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p10",
+          "product_name": "Jamón cocido",
+          "brand": "Campo Austral",
+          "category": "Fiambres",
+          "description": "COD. 15240-15241",
+          "image_description": "Jamón cocido en bloque y fetas",
+          "pricing": {
+            "current_price": "$1249,90",
+            "unit_price": "X 100 G.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 3,
+            "column": 2
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p11",
+          "product_name": "Caja x 2 planchas",
+          "brand": "Coto",
+          "category": "Elaboración propia",
+          "description": "Sabores Coto",
+          "image_description": "Sandwiches de miga en caja",
+          "pricing": {
+            "current_price": "$3799",
+            "unit_price": "X CAJA",
+            "discount_percentage": null,
+            "promotion_label": "2x1 LLEVANDO 2"
+          },
+          "badges": ["2x1", "ELABORACIÓN PROPIA"],
+          "bundle": true,
+          "position": {
+            "row": 3,
+            "column": 3
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p12",
+          "product_name": "Sandwiches de miga triples comunes/especiales",
+          "brand": null,
+          "category": "Panadería",
+          "description": "LLEVANDO 6 DEL MISMO VALOR",
+          "image_description": "Sandwiches de miga triples apilados",
+          "pricing": {
+            "current_price": null,
+            "unit_price": null,
+            "discount_percentage": 40,
+            "promotion_label": "-40%"
+          },
+          "badges": ["-40%"],
+          "position": {
+            "row": 3,
+            "column": 4
+          },
+          "style": {
+            "background_color": "black discount badge",
+            "price_color": "yellow",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        }
+      ]
+    },
+    {
+      "section_id": "produce",
+      "section_title": null,
+      "section_position": {
+        "x": 0,
+        "y": 3,
+        "width": 1,
+        "height": 1
+      },
+      "products": [
+        {
+          "product_id": "p13",
+          "product_name": "Sandía nacional",
+          "brand": null,
+          "category": "Frutas y Verduras",
+          "description": "COD. 456",
+          "image_description": "Rodajas de sandía",
+          "pricing": {
+            "current_price": "$699",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 4,
+            "column": 1
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p14",
+          "product_name": "Cebolla selección",
+          "brand": null,
+          "category": "Frutas y Verduras",
+          "description": "COD. 602",
+          "image_description": "Cebollas enteras y cortada",
+          "pricing": {
+            "current_price": "$799",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 4,
+            "column": 2
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p15",
+          "product_name": "Papa negra selección",
+          "brand": null,
+          "category": "Frutas y Verduras",
+          "description": "COD. 60947",
+          "image_description": "Papas negras enteras",
+          "pricing": {
+            "current_price": "$1199",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": [],
+          "position": {
+            "row": 4,
+            "column": 3
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        },
+        {
+          "product_id": "p16",
+          "product_name": "Banana Cavendish",
+          "brand": null,
+          "category": "Frutas y Verduras",
+          "description": "ORIGEN ECUADOR COD. 446",
+          "image_description": "Racimo de bananas",
+          "pricing": {
+            "current_price": "$1989",
+            "unit_price": "X KG.",
+            "discount_percentage": null,
+            "promotion_label": null
+          },
+          "badges": ["ORIGEN ECUADOR"],
+          "position": {
+            "row": 4,
+            "column": 4
+          },
+          "style": {
+            "background_color": "yellow price tag",
+            "price_color": "black",
+            "font_weight": "bold",
+            "border": "none"
+          }
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "disclaimer_text": null,
+    "store_locations": [],
+    "contact_info": null
+  }
+}
