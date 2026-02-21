@@ -13,6 +13,7 @@
   let debugEnabled = false;
   let observer = null;
   let debounceTimer = null;
+  let capturedApiUrl = null; // Base URL captured from the page's own Endeca XHR
 
   // ---- Constants ----
   const DEBOUNCE_MS = 400;
@@ -668,8 +669,93 @@
    * Builds the JSON API URL from the current page URL.
    * Adds format=json, No=0, Nrpp=<count>.
    */
+  // ---- Endeca API URL auto-capture ----
+
+  /**
+   * Returns true if the given URL looks like an Endeca/ATG product API call.
+   * Matches on the "/_/N-" path pattern (ATG state token) OR on Endeca
+   * query params (Nr=, Nf=), regardless of the actual path name.
+   * Only considers same-origin requests.
+   */
+  function isEndecaUrl(rawUrl) {
+    try {
+      const u = new URL(rawUrl);
+      if (u.origin !== window.location.origin) return false;
+      // ATG/Endeca state token in path (e.g. /_/N-1fa3vhj or /N-abc123)
+      if (/\/_\/N-[a-z0-9]+/i.test(u.pathname)) return true;
+      // Endeca query params present
+      if (u.searchParams.has("Nr") || u.searchParams.has("Nf")) return true;
+      return false;
+    } catch { return false; }
+  }
+
+  /**
+   * Scans already-loaded PerformanceResourceTiming entries for an Endeca URL.
+   */
+  function findEndecaUrlInPerformance() {
+    try {
+      for (const entry of performance.getEntriesByType("resource")) {
+        if ((entry.initiatorType === "xmlhttprequest" || entry.initiatorType === "fetch") &&
+            isEndecaUrl(entry.name)) {
+          return entry.name;
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  /**
+   * Sets up passive capture of the Endeca API URL.
+   * First checks existing performance entries (page may have already fetched),
+   * then installs a PerformanceObserver to catch future requests.
+   * Stores the result in capturedApiUrl.
+   */
+  function setupApiUrlCapture() {
+    const existing = findEndecaUrlInPerformance();
+    if (existing) {
+      capturedApiUrl = existing;
+      debugLog("[ApiCapture] Found existing Endeca URL in performance entries:", capturedApiUrl);
+      return;
+    }
+    if (typeof PerformanceObserver === "undefined") return;
+    const obs = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if ((entry.initiatorType === "xmlhttprequest" || entry.initiatorType === "fetch") &&
+            isEndecaUrl(entry.name) &&
+            !capturedApiUrl) {
+          capturedApiUrl = entry.name;
+          debugLog("[ApiCapture] Captured Endeca URL via PerformanceObserver:", capturedApiUrl);
+          obs.disconnect();
+          break;
+        }
+      }
+    });
+    // buffered:true catches entries that arrived before the observer was created
+    obs.observe({ type: "resource", buffered: true });
+  }
+
   function buildApiUrl(offset, nrpp) {
-    const url = new URL(window.location.href);
+    // Prefer the URL the page itself used — most reliable, works on any browser
+    // and survives URL structure changes. Falls back to window.location.href.
+    let baseHref = capturedApiUrl || window.location.href;
+    let url = new URL(baseHref);
+
+    // ATG/Endeca sometimes encodes the entire query string into the URL path
+    // (e.g. "/_/N-xxx%3FNf%3D...&Nr%3D..."). Detect %3F (encoded "?") in the
+    // pathname and decode it so the params end up in the real query string.
+    const rawPath = url.pathname;
+    const encodedQmark = rawPath.toLowerCase().indexOf('%3f');
+    if (encodedQmark !== -1) {
+      const realPath = rawPath.substring(0, encodedQmark);
+      // Decode the fake-query-string that was crammed into the path
+      const decodedQuery = decodeURIComponent(rawPath.substring(encodedQmark + 3));
+      // Rebuild a clean URL preserving any real query params that were already there
+      const existingSearch = url.search ? url.search.substring(1) + '&' : '';
+      const cleanHref = url.origin + realPath + '?' + existingSearch + decodedQuery;
+      url = new URL(cleanHref);
+      debugLog(`[buildApiUrl] Decoded path-encoded params. Clean URL base: ${url.origin + url.pathname + url.search}`);
+    }
+
     url.searchParams.set("format", "json");
     url.searchParams.set("No", String(offset));
     url.searchParams.set("Nrpp", String(nrpp));
@@ -687,9 +773,8 @@
     if (!page) return null;
 
     // Walk all top-level slots looking for Main_Slot → Category_ResultsList
-    for (const slotKey of ["Main"]) {
-      const slot = page[slotKey];
-      if (!Array.isArray(slot)) continue;
+    const slot = page["Main"];
+    if (Array.isArray(slot)) {
       for (const slotItem of slot) {
         if (slotItem["@type"] === "Main_Slot") {
           for (const content of slotItem.contents || []) {
@@ -789,8 +874,6 @@
       }
     } catch { /* ignore parse errors */ }
 
-    const offerLabel = get("product.tipoOferta") ? badges[0] || null : null;
-
     debugLog(`Parsed: ${name} | price=${priceText} | unit=${unitPriceText} | type=${unitType}`);
 
     return {
@@ -798,13 +881,9 @@
       href,
       imgSrc,
       priceText,
-      regularPrice: String(refPriceRaw),
       badges,
       unitPriceText,
-      offerLabel,
       unitType,
-      activePrice: activePriceRaw,
-      unitPrice: refPriceRaw,
     };
   }
 
@@ -1199,6 +1278,7 @@
   function init() {
     debugLog("Initializing Coto Sorter extension");
 
+    setupApiUrlCapture();
     injectUI();
     setupObserver();
 
