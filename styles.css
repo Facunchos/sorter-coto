@@ -167,6 +167,132 @@
   position: relative;
 }
 
+/* ---- Separator ---- */
+.coto-sorter-separator {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 6px 0;
+}
+
+/* ---- Generate dropdown ---- */
+.coto-sorter-generate-wrap {
+  position: relative;
+}
+
+.coto-sorter-dropdown {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 6px;
+  background: #fff;
+  border: 1.5px solid #e20025;
+  border-radius: 6px;
+  animation: coto-sorter-fade-in 0.15s ease;
+}
+
+.coto-sorter-dropdown.coto-sorter-dropdown-open {
+  display: flex;
+}
+
+.coto-sorter-dropdown-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 2px;
+}
+
+.coto-sorter-dropdown-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1.5px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin-bottom: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.coto-sorter-dropdown-input:focus {
+  outline: none;
+  border-color: #e20025;
+}
+
+.coto-sorter-dropdown-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+.coto-sorter-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #333;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.coto-sorter-dropdown-item:hover {
+  background: #fef0f2;
+  border-color: #e20025;
+  color: #e20025;
+}
+
+.coto-sorter-dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Progress indicator ---- */
+.coto-sorter-progress {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 8px;
+  background: #fff9e6;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #856404;
+}
+
+.coto-sorter-progress.coto-sorter-progress-active {
+  display: flex;
+}
+
+.coto-sorter-progress-text {
+  font-weight: 600;
+}
+
+.coto-sorter-progress-bar-wrap {
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.coto-sorter-progress-bar {
+  height: 100%;
+  background: #e20025;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+@keyframes coto-sorter-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ---- Responsive: smaller screens ---- */
 @media (max-width: 768px) {
   .coto-sorter-panel {
