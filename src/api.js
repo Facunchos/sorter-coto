@@ -160,10 +160,74 @@ window.CotoSorter.api = (function () {
 
     const priceText = formatApiPrice(activePriceRaw);
 
+    // ---- Cálculo de descuento para precio unitario ajustado ----
+    // La API devuelve sku.referencePrice como el precio por unidad (litro/kilo)
+    // calculado sin considerar promos tipo 2x1. Se aplica el mismo ratio que
+    // usa badges.js en el DOM: activePrice / precioRegular (pre-descuento).
+    let discountRatio = 1;
+
+    // Método 1: sku.listPrice (precio de lista, pre-descuento) vs activePrice
+    const listPriceRaw = parseFloat(get("sku.listPrice") || "0");
+    if (listPriceRaw > 0 && activePriceRaw > 0 && activePriceRaw < listPriceRaw) {
+      discountRatio = activePriceRaw / listPriceRaw;
+      debugLog(`[discount] ${name}: listPrice=${listPriceRaw} → ratio=${discountRatio.toFixed(4)}`);
+    }
+
+    // Método 2: parsear dtoDescuentos para deals cuantitativos (2x1, 3x2, etc.)
+    let dtoArr = [];
+    try { dtoArr = JSON.parse(get("product.dtoDescuentos") || "[]"); } catch { /* ignorar */ }
+
+    if (discountRatio === 1 && dtoArr.length > 0) {
+      for (const dto of dtoArr) {
+        // Campos numéricos del deal (nombres típicos en APIs de retail ATG/Endeca)
+        const llevar = dto.cantidadLlevar ?? dto.cantidadTomar ?? dto.qtyLlevar ?? dto.qtyTomar ?? 0;
+        const pagar  = dto.cantidadPagar  ?? dto.cantidadAbono ?? dto.qtyPagar  ?? dto.qtyAbono  ?? 0;
+        if (llevar > 0 && pagar > 0 && pagar < llevar) {
+          discountRatio = pagar / llevar;
+          debugLog(`[discount] ${name}: dto llevar=${llevar} pagar=${pagar} → ratio=${discountRatio.toFixed(4)}`);
+          break;
+        }
+
+        // Parseo de texto tipo "2X1", "3X2", "4X2" en textoDescuento
+        const textoDesc = (dto.textoDescuento || dto.textoLlevando || "").trim().toUpperCase();
+        const nxmMatch = textoDesc.match(/^(\d+)\s*[xX×]\s*(\d+)$/);
+        if (nxmMatch) {
+          const llevarN = parseInt(nxmMatch[1], 10);
+          const pagarN  = parseInt(nxmMatch[2], 10);
+          if (llevarN > 0 && pagarN > 0 && pagarN < llevarN) {
+            discountRatio = pagarN / llevarN;
+            debugLog(`[discount] ${name}: texto "${textoDesc}" → ratio=${discountRatio.toFixed(4)}`);
+            break;
+          }
+        }
+
+        // Parseo de porcentaje tipo "50% OFF", "20% DE DESCUENTO"
+        const pctMatch = textoDesc.match(/(\d+(?:[.,]\d+)?)\s*%/);
+        if (pctMatch) {
+          const pct = parseFloat(pctMatch[1].replace(",", "."));
+          if (pct > 0 && pct < 100) {
+            discountRatio = 1 - pct / 100;
+            debugLog(`[discount] ${name}: texto "${textoDesc}" ${pct}% → ratio=${discountRatio.toFixed(4)}`);
+            break;
+          }
+        }
+      }
+    }
+
+    // Precio de referencia ajustado por descuento
+    const adjustedReferencePrice = (refPriceRaw > 0 && discountRatio < 0.999)
+      ? refPriceRaw * discountRatio
+      : refPriceRaw;
+
+    // Texto de precio unitario: usa el precio ajustado si hay descuento
     let unitPriceText = null;
     if (refPriceRaw > 0 && cFormato.trim()) {
       const label = cFormato.trim().replace(/\s+/g, " ");
-      unitPriceText = `Precio por 1 ${label}: ${formatApiPrice(refPriceRaw)}`;
+      if (discountRatio < 0.999) {
+        unitPriceText = `Precio por 1 ${label}: ${formatApiPrice(adjustedReferencePrice)} (c/desc.)`;
+      } else {
+        unitPriceText = `Precio por 1 ${label}: ${formatApiPrice(refPriceRaw)}`;
+      }
     }
 
     // Badges: tipoOferta (sin "Todas las Ofertas") + textoLlevando de dtoDescuentos
@@ -171,19 +235,25 @@ window.CotoSorter.api = (function () {
       .map((t) => t.trim())
       .filter((t) => t && t !== "Todas las Ofertas");
 
-    try {
-      const dtoArr = JSON.parse(get("product.dtoDescuentos") || "[]");
-      for (const dto of dtoArr) {
-        if (dto.textoLlevando?.trim()) badges.push(dto.textoLlevando.trim());
-        if (dto.textoDescuento?.trim() && !badges.includes(dto.textoDescuento.trim())) {
-          badges.push(dto.textoDescuento.trim());
-        }
+    for (const dto of dtoArr) {
+      if (dto.textoLlevando?.trim()) badges.push(dto.textoLlevando.trim());
+      if (dto.textoDescuento?.trim() && !badges.includes(dto.textoDescuento.trim())) {
+        badges.push(dto.textoDescuento.trim());
       }
-    } catch { /* ignorar errores de parse */ }
+    }
 
-    debugLog(`Parsed: ${name} | price=${priceText} | unit=${unitPriceText} | type=${unitType}`);
+    debugLog(
+      `Parsed: ${name} | price=${priceText} | unit=${unitPriceText} | ` +
+      `type=${unitType} | ratio=${discountRatio.toFixed(4)}`
+    );
 
-    return { name, href, imgSrc, priceText, badges, unitPriceText, unitType, activePrice: activePriceRaw, referencePrice: refPriceRaw };
+    return {
+      name, href, imgSrc, priceText, badges, unitPriceText, unitType,
+      activePrice: activePriceRaw,
+      referencePrice: refPriceRaw,
+      adjustedReferencePrice,
+      discountRatio,
+    };
   }
 
   // ---- Scraping ----

@@ -28,14 +28,16 @@ window.CotoSorter.revista = (function () {
       groups.get(type).push(p);
     }
 
-    // Ordenar cada grupo por precio unitario ascendente
+    // Ordenar cada grupo por precio unitario ascendente.
+    // Se prioriza adjustedReferencePrice (descuento calculado matemáticamente)
+    // sobre referencePrice (precio listado por la página sin aplicar promos).
     for (const [type, prods] of groups) {
       prods.sort((a, b) => {
         const priceA = type
-          ? (a.referencePrice || a.activePrice || Infinity)
+          ? (a.adjustedReferencePrice || a.referencePrice || a.activePrice || Infinity)
           : (a.activePrice || Infinity);
         const priceB = type
-          ? (b.referencePrice || b.activePrice || Infinity)
+          ? (b.adjustedReferencePrice || b.referencePrice || b.activePrice || Infinity)
           : (b.activePrice || Infinity);
         return priceA - priceB;
       });
@@ -218,28 +220,35 @@ window.CotoSorter.revista = (function () {
         doc.text(p.priceText, x + 2, priceY);
       }
 
-      // Badges de oferta
+      // Badges de oferta — debajo del precio, dentro del box de la celda
+      const BADGE_H = 5;
+      const BADGE_PAD_X = 2.5;
+      const badgesStartY = priceY + 4;
       if (p.badges.length > 0) {
-        const badgeText = p.badges.join(" | ");
         doc.setFontSize(6);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(255, 255, 255);
-        const badgeW = doc.getTextWidth(badgeText) + 4;
-        const badgeX = x + cellW - badgeW - 2;
-        const badgeY = y + 1;
         doc.setFillColor(226, 0, 37);
-        doc.roundedRect(badgeX, badgeY, badgeW, 4.5, 1, 1, "F");
-        doc.text(badgeText, badgeX + 2, badgeY + 3.3);
+
+        const maxBadgeW = cellW - 4;
+        let badgeText = p.badges.join(" | ");
+        // Truncar si el texto es más ancho que la celda
+        while (badgeText.length > 3 && doc.getTextWidth(badgeText) + BADGE_PAD_X * 2 > maxBadgeW) {
+          badgeText = badgeText.substring(0, badgeText.length - 4) + "…";
+        }
+        const badgeW = Math.min(doc.getTextWidth(badgeText) + BADGE_PAD_X * 2, maxBadgeW);
+        doc.roundedRect(x + 2, badgesStartY, badgeW, BADGE_H, 1, 1, "F");
+        doc.text(badgeText, x + 2 + BADGE_PAD_X, badgesStartY + BADGE_H - 1.3);
       }
 
-      // Precio unitario (pie de celda)
+      // Precio unitario — pie de celda, fuente más grande y destacada
       if (p.unitPriceText) {
-        doc.setTextColor(100, 100, 100);
-        doc.setFontSize(5.5);
-        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(40, 80, 160);
         let upt = p.unitPriceText;
-        if (upt.length > 55) upt = upt.substring(0, 52) + "...";
-        doc.text(upt, x + 2, y + CELL_H - 2);
+        if (upt.length > 48) upt = upt.substring(0, 45) + "…";
+        doc.text(upt, x + 2, y + CELL_H - 2.5);
       }
 
       // Link clickeable sobre toda la celda
