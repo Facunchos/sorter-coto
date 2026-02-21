@@ -7,7 +7,17 @@
   "content_scripts": [
     {
       "matches": ["https://www.cotodigital.com.ar/*"],
-      "js": ["lib/jspdf.umd.min.js", "content.js"],
+      "js": [
+        "lib/jspdf.umd.min.js",
+        "src/utils.js",
+        "src/logger.js",
+        "src/badges.js",
+        "src/sorter.js",
+        "src/api.js",
+        "src/revista.js",
+        "src/ui.js",
+        "content.js"
+      ],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }
