@@ -439,24 +439,30 @@
   // ---- UI Injection ----
 
   let panelEl = null;
-  const filterButtons = {}; // key -> button element
+  const filterDropdownItems = {}; // key -> dropdown item element
+  let btnOrdenar = null;
   let btnReset = null;
 
   // All available filter types with labels
   const FILTER_TYPES = [
-    { key: "weight",  label: "Ordenar $/Kg ↑",     title: "Ordenar por precio real por kilogramo" },
-    { key: "volume",  label: "Ordenar $/L ↑",      title: "Ordenar por precio real por litro" },
-    { key: "100g",    label: "Ordenar $/100g ↑",   title: "Ordenar por precio por 100 gramos" },
-    { key: "square",  label: "Ordenar $/m² ↑",     title: "Ordenar por precio por cuadrado" },
-    { key: "unit",    label: "Ordenar $/Unidad ↑", title: "Ordenar por precio por unidad" },
+    { key: "weight",  label: "$/Kg ↑",     title: "Ordenar por precio real por kilogramo" },
+    { key: "volume",  label: "$/L ↑",      title: "Ordenar por precio real por litro" },
+    { key: "100g",    label: "$/100g ↑",   title: "Ordenar por precio por 100 gramos" },
+    { key: "square",  label: "$/m² ↑",     title: "Ordenar por precio por cuadrado" },
+    { key: "unit",    label: "$/Unidad ↑", title: "Ordenar por precio por unidad" },
   ];
 
   function updateButtonStates() {
     for (const ft of FILTER_TYPES) {
-      const btn = filterButtons[ft.key];
-      if (btn) {
-        btn.classList.toggle("coto-sorter-active", currentFilter === ft.key);
+      const item = filterDropdownItems[ft.key];
+      if (item) {
+        item.classList.toggle("coto-sorter-active", currentFilter === ft.key);
       }
+    }
+    if (btnOrdenar) {
+      const active = FILTER_TYPES.find(ft => ft.key === currentFilter);
+      btnOrdenar.textContent = active ? `Ordenar: ${active.label}` : "Ordenar";
+      btnOrdenar.classList.toggle("coto-sorter-active", !!active);
     }
   }
 
@@ -493,35 +499,39 @@
     const buttons = document.createElement("div");
     buttons.className = "coto-sorter-buttons";
 
-    // Create a button for each filter type
+    // ---- Ordenar button + dropdown ----
+    const ordenarWrap = document.createElement("div");
+    ordenarWrap.className = "coto-sorter-generate-wrap";
+
+    btnOrdenar = document.createElement("button");
+    btnOrdenar.className = "coto-sorter-btn";
+    btnOrdenar.textContent = "Ordenar";
+    btnOrdenar.title = "Elegir criterio de ordenamiento";
+
+    const ordenarDropdown = document.createElement("div");
+    ordenarDropdown.className = "coto-sorter-dropdown";
+
     for (const ft of FILTER_TYPES) {
-      const btn = document.createElement("button");
-      btn.className = "coto-sorter-btn";
-      btn.textContent = ft.label;
-      btn.title = ft.title + " (menor a mayor)";
-      btn.addEventListener("click", () => {
-        debugLog(`Button clicked: Sort by ${ft.key}`);
+      const item = document.createElement("button");
+      item.className = "coto-sorter-dropdown-item";
+      item.textContent = ft.label;
+      item.title = ft.title + " (menor a mayor)";
+      item.addEventListener("click", () => {
+        ordenarDropdown.classList.remove("coto-sorter-dropdown-open");
+        debugLog(`Ordenar dropdown: Sort by ${ft.key}`);
         sortProducts(ft.key);
       });
-      filterButtons[ft.key] = btn;
-      buttons.appendChild(btn);
+      filterDropdownItems[ft.key] = item;
+      ordenarDropdown.appendChild(item);
     }
 
-    btnReset = document.createElement("button");
-    btnReset.className = "coto-sorter-btn coto-sorter-btn-reset";
-    btnReset.textContent = "Reset";
-    btnReset.title = "Restaurar orden original y remover badges";
-    btnReset.addEventListener("click", () => {
-      debugLog("Button clicked: Reset");
-      resetOrder();
+    btnOrdenar.addEventListener("click", () => {
+      ordenarDropdown.classList.toggle("coto-sorter-dropdown-open");
     });
 
-    buttons.appendChild(btnReset);
-
-    // ---- Separator ----
-    const separator = document.createElement("hr");
-    separator.className = "coto-sorter-separator";
-    buttons.appendChild(separator);
+    ordenarWrap.appendChild(btnOrdenar);
+    ordenarWrap.appendChild(ordenarDropdown);
+    buttons.appendChild(ordenarWrap);
 
     // ---- Generar button + dropdown ----
     const generateWrap = document.createElement("div");
@@ -579,6 +589,30 @@
     generateWrap.appendChild(dropdown);
     generateWrap.appendChild(progressEl);
     buttons.appendChild(generateWrap);
+
+    // ---- Reset button ----
+    btnReset = document.createElement("button");
+    btnReset.className = "coto-sorter-btn coto-sorter-btn-reset";
+    btnReset.textContent = "Reset";
+    btnReset.title = "Restaurar orden original y remover badges";
+    btnReset.addEventListener("click", () => {
+      debugLog("Button clicked: Reset");
+      resetOrder();
+    });
+    buttons.appendChild(btnReset);
+
+    // ---- Separator ----
+    const separator = document.createElement("hr");
+    separator.className = "coto-sorter-separator";
+    buttons.appendChild(separator);
+
+    // ---- Opiniones! (próximamente) ----
+    const btnOpiniones = document.createElement("button");
+    btnOpiniones.className = "coto-sorter-btn coto-sorter-btn-opiniones";
+    btnOpiniones.textContent = "Opiniones!";
+    btnOpiniones.title = "Próximamente";
+    btnOpiniones.disabled = true;
+    buttons.appendChild(btnOpiniones);
 
     panelEl.appendChild(header);
     panelEl.appendChild(buttons);
