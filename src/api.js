@@ -8,7 +8,7 @@ window.CotoSorter.api = (function () {
   "use strict";
 
   const { debugLog } = window.CotoSorter.logger;
-  const { cFormatoToUnitType, formatApiPrice } = window.CotoSorter.utils;
+  const { cFormatoToUnitType, formatApiPrice, unitLabel } = window.CotoSorter.utils;
 
   // ---- Estado interno ----
   let capturedApiUrl = null;
@@ -160,57 +160,45 @@ window.CotoSorter.api = (function () {
 
     const priceText = formatApiPrice(activePriceRaw);
 
-    // ---- Cálculo de descuento para precio unitario ajustado ----
-    // La API devuelve sku.referencePrice como el precio por unidad (litro/kilo)
-    // calculado sin considerar promos tipo 2x1. Se aplica el mismo ratio que
-    // usa badges.js en el DOM: activePrice / precioRegular (pre-descuento).
-    let discountRatio = 1;
-
-    // Método 1: sku.listPrice (precio de lista, pre-descuento) vs activePrice
-    const listPriceRaw = parseFloat(get("sku.listPrice") || "0");
-    if (listPriceRaw > 0 && activePriceRaw > 0 && activePriceRaw < listPriceRaw) {
-      discountRatio = activePriceRaw / listPriceRaw;
-      debugLog(`[discount] ${name}: listPrice=${listPriceRaw} → ratio=${discountRatio.toFixed(4)}`);
-    }
-
-    // Método 2: parsear dtoDescuentos para deals cuantitativos (2x1, 3x2, etc.)
+    // ---- Parseo de dtoDescuentos ----
     let dtoArr = [];
     try { dtoArr = JSON.parse(get("product.dtoDescuentos") || "[]"); } catch { /* ignorar */ }
 
-    if (discountRatio === 1 && dtoArr.length > 0) {
+    // ---- Cálculo de descuento para precio unitario ajustado ----
+    // La API provee en cada entrada de dtoDescuentos el campo `precioDescuento`
+    // que ya representa el precio efectivo por unidad al tomar el deal
+    // (ej: "70% 2da" con activePrice=$1900 → precioDescuento="$1235.00c/u",
+    //  que es el promedio de pagar $1900 + $570 para 2 unidades).
+    // Calculamos discountRatio = mejorPrecioEfectivo / activePrice y lo
+    // aplicamos sobre referencePrice para obtener el precio por L/kg correcto.
+    let discountRatio = 1;
+
+    if (dtoArr.length > 0 && activePriceRaw > 0) {
+      let bestEffectivePrice = Infinity;
       for (const dto of dtoArr) {
-        // Campos numéricos del deal (nombres típicos en APIs de retail ATG/Endeca)
-        const llevar = dto.cantidadLlevar ?? dto.cantidadTomar ?? dto.qtyLlevar ?? dto.qtyTomar ?? 0;
-        const pagar  = dto.cantidadPagar  ?? dto.cantidadAbono ?? dto.qtyPagar  ?? dto.qtyAbono  ?? 0;
-        if (llevar > 0 && pagar > 0 && pagar < llevar) {
-          discountRatio = pagar / llevar;
-          debugLog(`[discount] ${name}: dto llevar=${llevar} pagar=${pagar} → ratio=${discountRatio.toFixed(4)}`);
-          break;
+        // precioDescuento puede ser "$1235.00c/u", "$3900.00", "$2502.50", etc.
+        // Extraer el primer número (formato US con punto decimal)
+        const match = (dto.precioDescuento || "").match(/[\d]+(?:\.\d+)?/);
+        const pd = match ? parseFloat(match[0]) : NaN;
+        if (!isNaN(pd) && pd > 0 && pd < bestEffectivePrice) {
+          bestEffectivePrice = pd;
         }
+      }
+      if (bestEffectivePrice < Infinity && bestEffectivePrice < activePriceRaw) {
+        discountRatio = bestEffectivePrice / activePriceRaw;
+        debugLog(
+          `[discount] ${name}: bestPrecioDescuento=${bestEffectivePrice} / active=${activePriceRaw}` +
+          ` → ratio=${discountRatio.toFixed(4)}`
+        );
+      }
+    }
 
-        // Parseo de texto tipo "2X1", "3X2", "4X2" en textoDescuento
-        const textoDesc = (dto.textoDescuento || dto.textoLlevando || "").trim().toUpperCase();
-        const nxmMatch = textoDesc.match(/^(\d+)\s*[xX×]\s*(\d+)$/);
-        if (nxmMatch) {
-          const llevarN = parseInt(nxmMatch[1], 10);
-          const pagarN  = parseInt(nxmMatch[2], 10);
-          if (llevarN > 0 && pagarN > 0 && pagarN < llevarN) {
-            discountRatio = pagarN / llevarN;
-            debugLog(`[discount] ${name}: texto "${textoDesc}" → ratio=${discountRatio.toFixed(4)}`);
-            break;
-          }
-        }
-
-        // Parseo de porcentaje tipo "50% OFF", "20% DE DESCUENTO"
-        const pctMatch = textoDesc.match(/(\d+(?:[.,]\d+)?)\s*%/);
-        if (pctMatch) {
-          const pct = parseFloat(pctMatch[1].replace(",", "."));
-          if (pct > 0 && pct < 100) {
-            discountRatio = 1 - pct / 100;
-            debugLog(`[discount] ${name}: texto "${textoDesc}" ${pct}% → ratio=${discountRatio.toFixed(4)}`);
-            break;
-          }
-        }
+    // Fallback: sku.listPrice vs activePrice (por si acaso)
+    if (discountRatio === 1) {
+      const listPriceRaw = parseFloat(get("sku.listPrice") || "0");
+      if (listPriceRaw > 0 && activePriceRaw > 0 && activePriceRaw < listPriceRaw) {
+        discountRatio = activePriceRaw / listPriceRaw;
+        debugLog(`[discount] ${name}: listPrice fallback=${listPriceRaw} → ratio=${discountRatio.toFixed(4)}`);
       }
     }
 
@@ -219,22 +207,18 @@ window.CotoSorter.api = (function () {
       ? refPriceRaw * discountRatio
       : refPriceRaw;
 
-    // Texto de precio unitario: usa el precio ajustado si hay descuento
+    // Texto de precio unitario corto: "$/L", "$/kg", etc.
     let unitPriceText = null;
-    if (refPriceRaw > 0 && cFormato.trim()) {
-      const label = cFormato.trim().replace(/\s+/g, " ");
-      if (discountRatio < 0.999) {
-        unitPriceText = `Precio por 1 ${label}: ${formatApiPrice(adjustedReferencePrice)} (c/desc.)`;
-      } else {
-        unitPriceText = `Precio por 1 ${label}: ${formatApiPrice(refPriceRaw)}`;
-      }
+    if (refPriceRaw > 0 && unitType) {
+      const shortLabel = unitLabel(unitType);   // "L", "kg", "100g", "m²", "u"
+      const priceToShow = discountRatio < 0.999 ? adjustedReferencePrice : refPriceRaw;
+      unitPriceText = `$/${shortLabel}: ${formatApiPrice(priceToShow)}`;
     }
 
-    // Badges: tipoOferta (sin "Todas las Ofertas") + textoLlevando de dtoDescuentos
-    const badges = (attr["product.tipoOferta"] || [])
-      .map((t) => t.trim())
-      .filter((t) => t && t !== "Todas las Ofertas");
-
+    // Badges: solo los deals reales de dtoDescuentos (textoLlevando / textoDescuento).
+    // Se omite tipoOferta porque contiene frases genéricas como "Hasta X% DTO!!"
+    // que ya quedan implícitas en el precio ajustado.
+    const badges = [];
     for (const dto of dtoArr) {
       if (dto.textoLlevando?.trim()) badges.push(dto.textoLlevando.trim());
       if (dto.textoDescuento?.trim() && !badges.includes(dto.textoDescuento.trim())) {
