@@ -118,6 +118,28 @@ window.CotoSorter.api = (function () {
   // ---- Construcción de URL ----
 
   /**
+   * Corrige el path duplicado que genera COTO al buscar desde el home.
+   * Cuando la página base es /sitios/cdigi/ y el XHR interno de COTO usa
+   * un path relativo sin barra inicial (ej: "sitios/cdigi/categoria/..."),
+   * el navegador lo resuelve como /sitios/cdigi/sitios/cdigi/categoria/...
+   * y esa URL malformada queda registrada en el buffer de Performance.
+   * Esta función detecta y elimina el segmento duplicado.
+   */
+  function normalizeEndecaPathDuplication(url) {
+    const path = url.pathname;
+    const prefix = "/sitios/cdigi";
+    if (path.startsWith(prefix + prefix)) {
+      try {
+        const fixed = new URL(url.toString());
+        fixed.pathname = path.slice(prefix.length);
+        debugLog(`[normalizeEndecaPath] Fixed doubled path: ${path} → ${fixed.pathname}`);
+        return fixed;
+      } catch { /* ignorar */ }
+    }
+    return url;
+  }
+
+  /**
    * Construye la URL de la API JSON Endeca con offset y tamaño de página.
    * Siempre refresca la URL capturada antes de construir para asegurarse
    * de usar la de la página actual (no una búsqueda anterior).
@@ -134,7 +156,7 @@ window.CotoSorter.api = (function () {
     }
 
     let baseHref = useCapture ? capturedApiUrl : window.location.href;
-    let url = new URL(baseHref);
+    let url = normalizeEndecaPathDuplication(new URL(baseHref));
 
     // ATG/Endeca a veces codifica el query string en el path como %3F
     const rawPath = url.pathname;
