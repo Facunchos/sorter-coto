@@ -117,17 +117,82 @@
   border-color: #666;
 }
 
-/* Opiniones button — próximamente */
+/* Opiniones button */
 .coto-sorter-btn-opiniones {
-  border-color: #bbb;
-  color: #aaa;
-  cursor: not-allowed;
-  opacity: 0.55;
+  border-color: #e20025;
+  color: #e20025;
+  cursor: pointer;
+  opacity: 1;
 }
 
 .coto-sorter-btn-opiniones:hover {
+  background: #fef0f2;
+  border-color: #e20025;
+}
+
+/* Opiniones modal */
+.coto-sorter-opiniones-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.coto-sorter-opiniones-modal {
+  width: 100%;
+  max-width: 420px;
   background: #fff;
-  border-color: #bbb;
+  border: 2px solid #e20025;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+}
+
+.coto-sorter-opiniones-text {
+  margin: 0;
+  color: #333;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.coto-sorter-opiniones-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #444;
+}
+
+.coto-sorter-opiniones-email {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  font-size: 13px;
+  user-select: text;
+}
+
+.coto-sorter-opiniones-email:focus {
+  outline: none;
+  border-color: #e20025;
+}
+
+.coto-sorter-opiniones-status {
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #009940;
+}
+
+.coto-sorter-opiniones-close {
+  margin-top: 4px;
 }
 
 /* Minimized state */

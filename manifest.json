@@ -15,6 +15,7 @@
         "src/api.js",
         "src/revista.js",
         "src/vistaLigera.js",
+        "src/opiniones.js",
         "src/ui.js",
         "content.js"
       ],

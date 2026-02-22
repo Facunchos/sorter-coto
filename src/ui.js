@@ -6,12 +6,47 @@ window.CotoSorter.ui = (function () {
 
   const { FILTER_TYPES } = window.CotoSorter.utils;
   const { debugLog } = window.CotoSorter.logger;
-  const { sortProducts, resetOrder } = window.CotoSorter.sorter;
+  const { sortProducts } = window.CotoSorter.sorter;
   const { startRevistaGeneration, startRevistaHTMLGeneration } = window.CotoSorter.revista;
+  const { showOpinionesPopup } = window.CotoSorter.opiniones;
+
+  const PENDING_VISTA_LIGERA_KEY = "cotoSorterPendingVistaLigera";
 
   let panelEl = null;
   const filterDropdownItems = {};
   let btnOrdenar = null;
+  let hasUsedVistaLigera = false;
+
+  function consumePendingVistaLigera() {
+    const raw = sessionStorage.getItem(PENDING_VISTA_LIGERA_KEY);
+    if (raw === null) {
+      return { hasPending: false, count: null };
+    }
+
+    sessionStorage.removeItem(PENDING_VISTA_LIGERA_KEY);
+
+    if (raw === "") {
+      return { hasPending: true, count: null };
+    }
+
+    const parsed = parseInt(raw, 10);
+    return {
+      hasPending: true,
+      count: Number.isNaN(parsed) ? null : parsed,
+    };
+  }
+
+  function scheduleVistaLigeraAfterReload() {
+    const { hasPending, count } = consumePendingVistaLigera();
+    if (!hasPending) return;
+
+    hasUsedVistaLigera = true;
+    debugLog("Vista Ligera pendiente detectada tras recarga; ejecutando generación automática");
+
+    setTimeout(() => {
+      startRevistaHTMLGeneration(count, updateProgress);
+    }, 250);
+  }
 
   // =========================================================
   // Progreso y estado
@@ -196,7 +231,15 @@ window.CotoSorter.ui = (function () {
     itemHTML.title = "Abre una pestaña con los productos en HTML — sin descargar archivos";
     itemHTML.addEventListener("click", () => {
       dropdown.classList.remove("coto-sorter-dropdown-open");
-      startRevistaHTMLGeneration(getCount(), updateProgress);
+      const count = getCount();
+      if (hasUsedVistaLigera) {
+        debugLog("Vista Ligera ya fue usada; recargando página para refrescar estado");
+        sessionStorage.setItem(PENDING_VISTA_LIGERA_KEY, count === null ? "" : String(count));
+        window.location.reload();
+        return;
+      }
+      hasUsedVistaLigera = true;
+      startRevistaHTMLGeneration(count, updateProgress);
     });
     dropdown.appendChild(itemHTML);
 
@@ -227,10 +270,10 @@ window.CotoSorter.ui = (function () {
     const btn = document.createElement("button");
     btn.className = "coto-sorter-btn coto-sorter-btn-reset";
     btn.textContent = "Reset";
-    btn.title = "Restaurar orden original y remover badges";
+    btn.title = "Recargar página y restaurar estado";
     btn.addEventListener("click", () => {
-      debugLog("Button clicked: Reset");
-      resetOrder(() => updateButtonStates(null));
+      debugLog("Button clicked: Reset (reload)");
+      window.location.reload();
     });
     return btn;
   }
@@ -239,8 +282,10 @@ window.CotoSorter.ui = (function () {
     const btn = document.createElement("button");
     btn.className = "coto-sorter-btn coto-sorter-btn-opiniones";
     btn.textContent = "Opiniones!";
-    btn.title = "Próximamente";
-    btn.disabled = true;
+    btn.title = "Enviar feedback por email";
+    btn.addEventListener("click", () => {
+      showOpinionesPopup();
+    });
     return btn;
   }
 
@@ -272,6 +317,7 @@ window.CotoSorter.ui = (function () {
 
     makeDraggable(panelEl, header);
     document.body.appendChild(panelEl);
+    scheduleVistaLigeraAfterReload();
     debugLog("UI panel injected");
   }
 
