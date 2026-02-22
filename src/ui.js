@@ -178,11 +178,11 @@ window.CotoSorter.ui = (function () {
 
     const getCount = () => countInput.value ? parseInt(countInput.value, 10) : null;
 
-    // Revista PDF
+    // Revista imprimible
     const itemRevista = document.createElement("button");
     itemRevista.className = "coto-sorter-dropdown-item";
-    itemRevista.textContent = "📰 Revista Promos";
-    itemRevista.title = "Genera un PDF con todos los productos de todas las páginas";
+    itemRevista.textContent = "📰 Revista (Imprimible/PDF)";
+    itemRevista.title = "Abre una revista imprimible (podés guardarla como PDF desde el navegador)";
     itemRevista.addEventListener("click", () => {
       dropdown.classList.remove("coto-sorter-dropdown-open");
       startRevistaGeneration(getCount(), updateProgress);
@@ -203,12 +203,19 @@ window.CotoSorter.ui = (function () {
     // Indicador de progreso
     const progressEl = document.createElement("div");
     progressEl.className = "coto-sorter-progress";
-    progressEl.innerHTML = `
-      <span class="coto-sorter-progress-text">Preparando...</span>
-      <div class="coto-sorter-progress-bar-wrap">
-        <div class="coto-sorter-progress-bar"></div>
-      </div>
-    `;
+    const progressText = document.createElement("span");
+    progressText.className = "coto-sorter-progress-text";
+    progressText.textContent = "Preparando...";
+
+    const progressBarWrap = document.createElement("div");
+    progressBarWrap.className = "coto-sorter-progress-bar-wrap";
+
+    const progressBar = document.createElement("div");
+    progressBar.className = "coto-sorter-progress-bar";
+
+    progressBarWrap.appendChild(progressBar);
+    progressEl.appendChild(progressText);
+    progressEl.appendChild(progressBarWrap);
 
     wrap.appendChild(btnGenerar);
     wrap.appendChild(dropdown);

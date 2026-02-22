@@ -23,7 +23,7 @@ Esta extensión:
 1. **Calcula el precio unitario real** aplicando el ratio de descuento
 2. **Muestra un badge visual** en cada producto con el precio ajustado
 3. **Ordena de menor a mayor** por precio real por kg, litro, 100g, m² o unidad
-4. **Genera revista de promos** — PDF o vista HTML con todos los productos de la categoría
+4. **Genera revista de promos** — versión imprimible (guardar como PDF) o vista HTML con todos los productos de la categoría
 
 ## Instalación
 
@@ -41,7 +41,7 @@ Esta extensión:
 1. Navegá a [Coto Digital](https://www.cotodigital.com.ar) y buscá productos
 2. Aparece un **panel flotante** (arrastrable y minimizable) con:
    - **Ordenar** — elegí criterio: $/Kg, $/L, $/100g, $/m², $/Unidad
-   - **Generar** — PDF "Revista Promos" o vista HTML ligera
+   - **Generar** — "Revista (Imprimible/PDF)" o vista HTML ligera
    - **Reset** — restaurá el orden original
 3. Los **badges** aparecen en cada card: verdes (con descuento) o grises (sin descuento)
 
@@ -64,14 +64,12 @@ sorter-coto-precio/
 │   ├── badges.js          ← Extracción de precios e inyección de badges
 │   ├── sorter.js          ← Ordenamiento de productos
 │   ├── api.js             ← Captura de URL Endeca y scraping JSON
-│   ├── revista.js         ← Generación de PDF y flujo de revista
+│   ├── revista.js         ← Flujo de revista imprimible y HTML
 │   ├── vistaLigera.js     ← Generación de vista HTML
 │   └── ui.js              ← Panel flotante y controles
 ├── popup/
 │   ├── popup.html         ← Popup con toggle de debug
 │   └── popup.js
-├── lib/
-│   └── jspdf.umd.min.js  ← Librería para generar PDFs
 └── icons/
 ```
 

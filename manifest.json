@@ -8,7 +8,6 @@
     {
       "matches": ["https://www.cotodigital.com.ar/*"],
       "js": [
-        "lib/jspdf.umd.min.js",
         "src/utils.js",
         "src/logger.js",
         "src/badges.js",

@@ -235,6 +235,33 @@ window.CotoSorter.vistaLigera = (function () {
       margin-top: auto;
       padding-top: 4px;
     }
+
+    @media print {
+      body { background: #fff; }
+      header {
+        position: static;
+        box-shadow: none;
+        background: #fff;
+        color: #000;
+        border-bottom: 2px solid #e20025;
+      }
+      .search-wrap, .search-count, .group-collapse-btn { display: none !important; }
+      .group { break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
+      .group-separator {
+        background: #fff;
+        color: #000;
+        border-top: 1px solid #e20025;
+        border-bottom: 1px solid #e20025;
+      }
+      .products-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px 12px;
+      }
+      .card { break-inside: avoid; page-break-inside: avoid; }
+      .card-link:hover .card { box-shadow: none; transform: none; border-color: #e8e8e8; }
+      @page { size: A4 landscape; margin: 8mm; }
+    }
   `;
 
   // ---- Script de búsqueda (se embebe como texto en el HTML final) ----
@@ -295,7 +322,12 @@ window.CotoSorter.vistaLigera = (function () {
    * No descarga archivos; usa un Blob URL que el navegador resuelve en memoria.
    * @param {object[]} products — lista de productos ya scrapeados
    */
-  function generateRevistaHTML(products) {
+  function generateRevistaHTML(products, options) {
+    const opts = options || {};
+    const title = opts.title || "Vista Ligera — COTO Promos";
+    const printMode = !!opts.printMode;
+    const autoPrint = !!opts.autoPrint;
+
     const { groupAndSortProducts } = window.CotoSorter.revista;
     const groups = groupAndSortProducts(products);
 
@@ -311,12 +343,12 @@ window.CotoSorter.vistaLigera = (function () {
       "<head>",
       '  <meta charset="UTF-8">',
       '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
-      "  <title>Vista Ligera \u2014 COTO Promos</title>",
+      "  <title>" + title + "</title>",
       "  <style>" + STYLES + "  </style>",
       "</head>",
       "<body>",
       "  <header>",
-      "    <h1>COTO \u2014 Vista Ligera</h1>",
+      "    <h1>" + (printMode ? "COTO — Revista Promos" : "COTO — Vista Ligera") + "</h1>",
       '    <div class="search-wrap">',
       '      <input type="search" id="search-input" placeholder="Buscar producto\u2026" autocomplete="off" spellcheck="false">',
       '      <button class="search-clear" id="search-clear" title="Limpiar b\u00fasqueda">\u2715</button>',
@@ -327,6 +359,7 @@ window.CotoSorter.vistaLigera = (function () {
       "  <main>",
       sectionsHTML,
       "  </main>",
+      autoPrint ? "  <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 350); });</" + "script>" : "",
       "  <script>" + SEARCH_SCRIPT + "</" + "script>",
       "</body>",
       "</html>",
