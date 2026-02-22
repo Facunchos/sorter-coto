@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Coto Sorter - Precio por Unidad",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Ordena productos de Coto Digital por precio real por kilo o litro, considerando descuentos y promos.",
   "permissions": ["storage", "activeTab"],
   "content_scripts": [
