@@ -201,47 +201,62 @@ window.CotoSorter.revista = (function () {
         } catch { /* ignorar */ }
       }
 
-      // Nombre
+      // Nombre — fuente 6pt para dejar espacio a los precios
       const nameY = y + IMG_H + 3;
       doc.setTextColor(33, 33, 33);
-      doc.setFontSize(7);
+      doc.setFontSize(6);
       doc.setFont("helvetica", "bold");
       let displayName = p.name || "Producto";
-      if (displayName.length > 50) displayName = displayName.substring(0, 47) + "...";
+      if (displayName.length > 55) displayName = displayName.substring(0, 52) + "…";
       const nameLines = doc.splitTextToSize(displayName, cellW - 4);
       doc.text(nameLines.slice(0, 2), x + 2, nameY);
 
-      // Precio
-      const priceY = nameY + Math.min(nameLines.length, 2) * 3 + 1;
-      if (p.priceText) {
-        doc.setTextColor(226, 0, 37);
-        doc.setFontSize(10);
+      // ---- Bloque de precios ----
+      // Posición de partida: debajo del nombre (2 líneas × 2.8mm + 1.5mm gap)
+      const hasDiscount = !!p.discountedPriceText;
+      let curY = nameY + Math.min(nameLines.length, 2) * 2.8 + 2;
+
+      // Fila "Regular:"
+      doc.setFontSize(6);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(120, 120, 120);
+      doc.text("Regular:", x + 2, curY);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(hasDiscount ? 160 : 226, hasDiscount ? 160 : 0, hasDiscount ? 160 : 37);
+      doc.text(p.priceText || "", x + 2 + doc.getTextWidth("Regular: "), curY);
+      curY += 4.5;
+
+      // Fila "c/desc.:" — solo si hay descuento
+      if (hasDiscount) {
+        doc.setFontSize(6);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(120, 120, 120);
+        doc.text("c/desc.:", x + 2, curY);
         doc.setFont("helvetica", "bold");
-        doc.text(p.priceText, x + 2, priceY);
+        doc.setTextColor(0, 160, 60);   // verde
+        doc.text(p.discountedPriceText, x + 2 + doc.getTextWidth("c/desc.: "), curY);
+        curY += 4.5;
       }
 
-      // Badges de oferta — debajo del precio, dentro del box de la celda
-      const BADGE_H = 5;
-      const BADGE_PAD_X = 2.5;
-      const badgesStartY = priceY + 4;
+      // Badges de oferta — debajo de los precios
       if (p.badges.length > 0) {
-        doc.setFontSize(6);
+        const BADGE_H = 4.5;
+        const BADGE_PAD_X = 2;
+        doc.setFontSize(5.5);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(255, 255, 255);
         doc.setFillColor(226, 0, 37);
-
         const maxBadgeW = cellW - 4;
         let badgeText = p.badges.join(" | ");
-        // Truncar si el texto es más ancho que la celda
         while (badgeText.length > 3 && doc.getTextWidth(badgeText) + BADGE_PAD_X * 2 > maxBadgeW) {
           badgeText = badgeText.substring(0, badgeText.length - 4) + "…";
         }
         const badgeW = Math.min(doc.getTextWidth(badgeText) + BADGE_PAD_X * 2, maxBadgeW);
-        doc.roundedRect(x + 2, badgesStartY, badgeW, BADGE_H, 1, 1, "F");
-        doc.text(badgeText, x + 2 + BADGE_PAD_X, badgesStartY + BADGE_H - 1.3);
+        doc.roundedRect(x + 2, curY, badgeW, BADGE_H, 1, 1, "F");
+        doc.text(badgeText, x + 2 + BADGE_PAD_X, curY + BADGE_H - 1.2);
       }
 
-      // Precio unitario — pie de celda, fuente más grande y destacada
+      // Precio por L/kg — pie de celda, azul bold
       if (p.unitPriceText) {
         doc.setFontSize(7);
         doc.setFont("helvetica", "bold");
@@ -348,5 +363,46 @@ window.CotoSorter.revista = (function () {
     }
   }
 
-  return { groupAndSortProducts, generateRevistaPDF, startRevistaGeneration };
+  /**
+   * Flujo completo: scraping → Vista HTML en nueva pestaña.
+   * @param {number|null} maxCount — límite de productos, null para todos
+   * @param {Function} updateProgressFn — (text, pct) => void (viene de ui.js)
+   */
+  async function startRevistaHTMLGeneration(maxCount, updateProgressFn) {
+    try {
+      debugLog("Starting Revista HTML generation...");
+      updateProgressFn("Consultando API de COTO...", 5);
+
+      let allProducts = await scrapeAllPages((loaded, total) => {
+        const pct = total > 0 ? Math.min((loaded / total) * 80, 80) : 10;
+        const label = total > 0
+          ? `Obteniendo productos (${loaded}/${total})...`
+          : "Obteniendo productos...";
+        updateProgressFn(label, pct);
+      });
+
+      if (allProducts.length === 0) {
+        updateProgressFn(null, 0);
+        alert("No se encontraron productos en esta página.");
+        return;
+      }
+
+      if (maxCount && maxCount > 0 && maxCount < allProducts.length) {
+        allProducts = allProducts.slice(0, maxCount);
+        debugLog(`Limited to first ${maxCount} products`);
+      }
+
+      updateProgressFn("Generando vista HTML...", 90);
+      window.CotoSorter.vistaLigera.generateRevistaHTML(allProducts);
+
+      updateProgressFn("✓ Vista abierta en nueva pestaña", 100);
+      setTimeout(() => updateProgressFn(null, 0), 3000);
+    } catch (err) {
+      console.error("[CotoSorter] Revista HTML generation error:", err);
+      updateProgressFn("✗ Error: " + err.message, 0);
+      setTimeout(() => updateProgressFn(null, 0), 5000);
+    }
+  }
+
+  return { groupAndSortProducts, generateRevistaPDF, startRevistaGeneration, startRevistaHTMLGeneration };
 })();

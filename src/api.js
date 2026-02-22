@@ -30,10 +30,41 @@ window.CotoSorter.api = (function () {
     } catch { return false; }
   }
 
-  /** Busca en PerformanceResourceTiming una URL Endeca ya cargada. */
+  /**
+   * Extrae el path base de una URL de Endeca para comparar con la página actual.
+   * Ej: "/catalogo-bebidas-bebidas-con-alcohol-cerveza/_/N-137sk0z" → "/catalogo-bebidas-bebidas-con-alcohol-cerveza"
+   */
+  function endecaBasePath(rawUrl) {
+    try {
+      const pathname = new URL(rawUrl).pathname;
+      // El path puede estar codificado (%3F), decodificar antes de cortar
+      const decoded = decodeURIComponent(pathname);
+      const nIdx = decoded.indexOf("/_/N-");
+      return nIdx !== -1 ? decoded.substring(0, nIdx) : decoded;
+    } catch { return ""; }
+  }
+
+  /**
+   * Retorna true si la URL capturada corresponde a la página actualmente visible.
+   * Compara el path base de la URL Endeca contra window.location.pathname.
+   */
+  function capturedUrlMatchesCurrentPage(url) {
+    if (!url) return false;
+    const captured = endecaBasePath(url).replace(/\/$/, "");
+    const current  = decodeURIComponent(window.location.pathname).replace(/\/$/, "");
+    return current.startsWith(captured) || captured.startsWith(current);
+  }
+
+  /**
+   * Busca en PerformanceResourceTiming la última URL Endeca registrada
+   * (la más reciente, no la primera, para capturar cambios de búsqueda).
+   */
   function findEndecaUrlInPerformance() {
     try {
-      for (const entry of performance.getEntriesByType("resource")) {
+      const entries = performance.getEntriesByType("resource");
+      // Recorrer en reversa para obtener la más reciente
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const entry = entries[i];
         if (
           (entry.initiatorType === "xmlhttprequest" || entry.initiatorType === "fetch") &&
           isEndecaUrl(entry.name)
@@ -46,17 +77,25 @@ window.CotoSorter.api = (function () {
   }
 
   /**
+   * Refresca capturedApiUrl buscando la URL más reciente que corresponda
+   * a la página actual. Llamar antes de iniciar un scraping.
+   */
+  function refreshCapturedUrl() {
+    const latest = findEndecaUrlInPerformance();
+    if (latest) {
+      capturedApiUrl = latest;
+      debugLog("[ApiCapture] Refreshed URL:", capturedApiUrl);
+    }
+  }
+
+  /**
    * Configura captura pasiva de la URL Endeca.
-   * Primero revisa entradas existentes en Performance, luego instala
-   * un PerformanceObserver para requests futuros.
+   * El PerformanceObserver permanece activo toda la sesión y siempre
+   * actualiza capturedApiUrl con la última URL vista (sin desconectarse).
    */
   function setupApiUrlCapture() {
-    const existing = findEndecaUrlInPerformance();
-    if (existing) {
-      capturedApiUrl = existing;
-      debugLog("[ApiCapture] Found existing Endeca URL in performance entries:", capturedApiUrl);
-      return;
-    }
+    // Captura inicial desde el buffer de Performance
+    refreshCapturedUrl();
 
     if (typeof PerformanceObserver === "undefined") return;
 
@@ -64,18 +103,15 @@ window.CotoSorter.api = (function () {
       for (const entry of list.getEntries()) {
         if (
           (entry.initiatorType === "xmlhttprequest" || entry.initiatorType === "fetch") &&
-          isEndecaUrl(entry.name) &&
-          !capturedApiUrl
+          isEndecaUrl(entry.name)
         ) {
           capturedApiUrl = entry.name;
-          debugLog("[ApiCapture] Captured Endeca URL via PerformanceObserver:", capturedApiUrl);
-          obs.disconnect();
-          break;
+          debugLog("[ApiCapture] Updated URL via PerformanceObserver:", capturedApiUrl);
+          // No desconectarse: seguir observando para futuros cambios de búsqueda
         }
       }
     });
 
-    // buffered:true captura entradas previas a la creación del observer
     obs.observe({ type: "resource", buffered: true });
   }
 
@@ -83,10 +119,21 @@ window.CotoSorter.api = (function () {
 
   /**
    * Construye la URL de la API JSON Endeca con offset y tamaño de página.
-   * Usa la URL capturada del propio request de la página como base.
+   * Siempre refresca la URL capturada antes de construir para asegurarse
+   * de usar la de la página actual (no una búsqueda anterior).
    */
   function buildApiUrl(offset, nrpp) {
-    let baseHref = capturedApiUrl || window.location.href;
+    // Re-escanear Performance por si hubo cambio de búsqueda desde la última vez
+    refreshCapturedUrl();
+
+    // Validar que la URL capturada corresponde a la página actual;
+    // si no, caer a window.location.href para evitar mezclar búsquedas.
+    const useCapture = capturedApiUrl && capturedUrlMatchesCurrentPage(capturedApiUrl);
+    if (!useCapture && capturedApiUrl) {
+      debugLog("[ApiCapture] Captured URL doesn't match current page, falling back to location.href");
+    }
+
+    let baseHref = useCapture ? capturedApiUrl : window.location.href;
     let url = new URL(baseHref);
 
     // ATG/Endeca a veces codifica el query string en el path como %3F
@@ -215,6 +262,11 @@ window.CotoSorter.api = (function () {
       unitPriceText = `$/${shortLabel}: ${formatApiPrice(priceToShow)}`;
     }
 
+    // Precio efectivo con el mejor deal aplicado (para mostrar en revista)
+    const discountedPriceText = (discountRatio < 0.999)
+      ? formatApiPrice(activePriceRaw * discountRatio)
+      : null;
+
     // Badges: solo los deals reales de dtoDescuentos (textoLlevando / textoDescuento).
     // Se omite tipoOferta porque contiene frases genéricas como "Hasta X% DTO!!"
     // que ya quedan implícitas en el precio ajustado.
@@ -232,7 +284,7 @@ window.CotoSorter.api = (function () {
     );
 
     return {
-      name, href, imgSrc, priceText, badges, unitPriceText, unitType,
+      name, href, imgSrc, priceText, discountedPriceText, badges, unitPriceText, unitType,
       activePrice: activePriceRaw,
       referencePrice: refPriceRaw,
       adjustedReferencePrice,

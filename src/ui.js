@@ -10,7 +10,7 @@ window.CotoSorter.ui = (function () {
   const { FILTER_TYPES } = window.CotoSorter.utils;
   const { debugLog } = window.CotoSorter.logger;
   const { sortProducts, resetOrder } = window.CotoSorter.sorter;
-  const { startRevistaGeneration } = window.CotoSorter.revista;
+  const { startRevistaGeneration, startRevistaHTMLGeneration } = window.CotoSorter.revista;
 
   // ---- Estado interno ----
   let panelEl = null;
@@ -197,6 +197,17 @@ window.CotoSorter.ui = (function () {
     });
 
     genDropdown.appendChild(itemRevista);
+
+    const itemHTML = document.createElement("button");
+    itemHTML.className = "coto-sorter-dropdown-item";
+    itemHTML.textContent = "⚡ Vista Ligera";
+    itemHTML.title = "Abre una pestaña con los productos en HTML — sin descargar archivos";
+    itemHTML.addEventListener("click", () => {
+      genDropdown.classList.remove("coto-sorter-dropdown-open");
+      const count = countInput.value ? parseInt(countInput.value, 10) : null;
+      startRevistaHTMLGeneration(count, updateProgress);
+    });
+    genDropdown.appendChild(itemHTML);
 
     // Indicador de progreso
     const progressEl = document.createElement("div");
