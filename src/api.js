@@ -1,7 +1,4 @@
-// ===========================================================
 // api.js — Captura de URL Endeca y scraping de productos via API JSON
-// Dependencias: utils, logger
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.api = (function () {
@@ -10,59 +7,44 @@ window.CotoSorter.api = (function () {
   const { debugLog } = window.CotoSorter.logger;
   const { cFormatoToUnitType, formatApiPrice, unitLabel } = window.CotoSorter.utils;
 
-  // ---- Estado interno ----
   let capturedApiUrl = null;
 
-  // ---- Captura de URL Endeca ----
+  // =========================================================
+  // Captura de URL Endeca
+  // =========================================================
 
-  /**
-   * Determina si una URL corresponde a una llamada Endeca/ATG de productos.
-   * Matchea el patrón "/_/N-" en el path o query params Nr=/Nf=.
-   * Solo considera requests del mismo origen.
-   */
+  /** Determina si una URL corresponde a una llamada Endeca/ATG de productos. */
   function isEndecaUrl(rawUrl) {
     try {
       const u = new URL(rawUrl);
       if (u.origin !== window.location.origin) return false;
-      if (/\/_\/N-[a-z0-9]+/i.test(u.pathname)) return true;
-      if (u.searchParams.has("Nr") || u.searchParams.has("Nf")) return true;
-      return false;
+      return /\/_\/N-[a-z0-9]+/i.test(u.pathname)
+        || u.searchParams.has("Nr")
+        || u.searchParams.has("Nf");
     } catch { return false; }
   }
 
-  /**
-   * Extrae el path base de una URL de Endeca para comparar con la página actual.
-   * Ej: "/catalogo-bebidas-bebidas-con-alcohol-cerveza/_/N-137sk0z" → "/catalogo-bebidas-bebidas-con-alcohol-cerveza"
-   */
+  /** Extrae el path base antes de "/_/N-" para comparar con la página actual. */
   function endecaBasePath(rawUrl) {
     try {
-      const pathname = new URL(rawUrl).pathname;
-      // El path puede estar codificado (%3F), decodificar antes de cortar
-      const decoded = decodeURIComponent(pathname);
+      const decoded = decodeURIComponent(new URL(rawUrl).pathname);
       const nIdx = decoded.indexOf("/_/N-");
       return nIdx !== -1 ? decoded.substring(0, nIdx) : decoded;
     } catch { return ""; }
   }
 
-  /**
-   * Retorna true si la URL capturada corresponde a la página actualmente visible.
-   * Compara el path base de la URL Endeca contra window.location.pathname.
-   */
+  /** Retorna true si la URL capturada corresponde a la página visible. */
   function capturedUrlMatchesCurrentPage(url) {
     if (!url) return false;
     const captured = endecaBasePath(url).replace(/\/$/, "");
-    const current  = decodeURIComponent(window.location.pathname).replace(/\/$/, "");
+    const current = decodeURIComponent(window.location.pathname).replace(/\/$/, "");
     return current.startsWith(captured) || captured.startsWith(current);
   }
 
-  /**
-   * Busca en PerformanceResourceTiming la última URL Endeca registrada
-   * (la más reciente, no la primera, para capturar cambios de búsqueda).
-   */
+  /** Busca la última URL Endeca en PerformanceResourceTiming. */
   function findEndecaUrlInPerformance() {
     try {
       const entries = performance.getEntriesByType("resource");
-      // Recorrer en reversa para obtener la más reciente
       for (let i = entries.length - 1; i >= 0; i--) {
         const entry = entries[i];
         if (
@@ -76,10 +58,7 @@ window.CotoSorter.api = (function () {
     return null;
   }
 
-  /**
-   * Refresca capturedApiUrl buscando la URL más reciente que corresponda
-   * a la página actual. Llamar antes de iniciar un scraping.
-   */
+  /** Refresca capturedApiUrl con la URL más reciente de Performance. */
   function refreshCapturedUrl() {
     const latest = findEndecaUrlInPerformance();
     if (latest) {
@@ -88,13 +67,8 @@ window.CotoSorter.api = (function () {
     }
   }
 
-  /**
-   * Configura captura pasiva de la URL Endeca.
-   * El PerformanceObserver permanece activo toda la sesión y siempre
-   * actualiza capturedApiUrl con la última URL vista (sin desconectarse).
-   */
+  /** Configura captura pasiva de URL Endeca via PerformanceObserver. */
   function setupApiUrlCapture() {
-    // Captura inicial desde el buffer de Performance
     refreshCapturedUrl();
 
     if (typeof PerformanceObserver === "undefined") return;
@@ -107,7 +81,6 @@ window.CotoSorter.api = (function () {
         ) {
           capturedApiUrl = entry.name;
           debugLog("[ApiCapture] Updated URL via PerformanceObserver:", capturedApiUrl);
-          // No desconectarse: seguir observando para futuros cambios de búsqueda
         }
       }
     });
@@ -115,60 +88,50 @@ window.CotoSorter.api = (function () {
     obs.observe({ type: "resource", buffered: true });
   }
 
-  // ---- Construcción de URL ----
+  // =========================================================
+  // Construcción de URL
+  // =========================================================
 
-  /**
-   * Corrige el path duplicado que genera COTO al buscar desde el home.
-   * Cuando la página base es /sitios/cdigi/ y el XHR interno de COTO usa
-   * un path relativo sin barra inicial (ej: "sitios/cdigi/categoria/..."),
-   * el navegador lo resuelve como /sitios/cdigi/sitios/cdigi/categoria/...
-   * y esa URL malformada queda registrada en el buffer de Performance.
-   * Esta función detecta y elimina el segmento duplicado.
-   */
+  /** Corrige el path duplicado "/sitios/cdigi/sitios/cdigi/..." que genera COTO. */
   function normalizeEndecaPathDuplication(url) {
-    const path = url.pathname;
     const prefix = "/sitios/cdigi";
-    if (path.startsWith(prefix + prefix)) {
+    if (url.pathname.startsWith(prefix + prefix)) {
       try {
         const fixed = new URL(url.toString());
-        fixed.pathname = path.slice(prefix.length);
-        debugLog(`[normalizeEndecaPath] Fixed doubled path: ${path} → ${fixed.pathname}`);
+        fixed.pathname = url.pathname.slice(prefix.length);
+        debugLog(`[normalizeEndecaPath] Fixed doubled path: ${url.pathname} → ${fixed.pathname}`);
         return fixed;
       } catch { /* ignorar */ }
     }
     return url;
   }
 
-  /**
-   * Construye la URL de la API JSON Endeca con offset y tamaño de página.
-   * Siempre refresca la URL capturada antes de construir para asegurarse
-   * de usar la de la página actual (no una búsqueda anterior).
-   */
+  /** Decodifica query params que ATG/Endeca codifica como %3F en el path. */
+  function decodePathEncodedParams(url) {
+    const rawPath = url.pathname;
+    const encodedQmark = rawPath.toLowerCase().indexOf("%3f");
+    if (encodedQmark === -1) return url;
+
+    const realPath = rawPath.substring(0, encodedQmark);
+    const decodedQuery = decodeURIComponent(rawPath.substring(encodedQmark + 3));
+    const existingSearch = url.search ? url.search.substring(1) + "&" : "";
+    const cleanHref = url.origin + realPath + "?" + existingSearch + decodedQuery;
+    debugLog(`[buildApiUrl] Decoded path-encoded params`);
+    return new URL(cleanHref);
+  }
+
+  /** Construye la URL de API JSON Endeca con offset y tamaño de página. */
   function buildApiUrl(offset, nrpp) {
-    // Re-escanear Performance por si hubo cambio de búsqueda desde la última vez
     refreshCapturedUrl();
 
-    // Validar que la URL capturada corresponde a la página actual;
-    // si no, caer a window.location.href para evitar mezclar búsquedas.
     const useCapture = capturedApiUrl && capturedUrlMatchesCurrentPage(capturedApiUrl);
     if (!useCapture && capturedApiUrl) {
       debugLog("[ApiCapture] Captured URL doesn't match current page, falling back to location.href");
     }
 
-    let baseHref = useCapture ? capturedApiUrl : window.location.href;
+    const baseHref = useCapture ? capturedApiUrl : window.location.href;
     let url = normalizeEndecaPathDuplication(new URL(baseHref));
-
-    // ATG/Endeca a veces codifica el query string en el path como %3F
-    const rawPath = url.pathname;
-    const encodedQmark = rawPath.toLowerCase().indexOf("%3f");
-    if (encodedQmark !== -1) {
-      const realPath = rawPath.substring(0, encodedQmark);
-      const decodedQuery = decodeURIComponent(rawPath.substring(encodedQmark + 3));
-      const existingSearch = url.search ? url.search.substring(1) + "&" : "";
-      const cleanHref = url.origin + realPath + "?" + existingSearch + decodedQuery;
-      url = new URL(cleanHref);
-      debugLog(`[buildApiUrl] Decoded path-encoded params. Base: ${url.origin + url.pathname + url.search}`);
-    }
+    url = decodePathEncodedParams(url);
 
     url.searchParams.set("format", "json");
     url.searchParams.set("No", String(offset));
@@ -177,12 +140,11 @@ window.CotoSorter.api = (function () {
     return url.toString();
   }
 
-  // ---- Parseo de respuesta ----
+  // =========================================================
+  // Parseo de respuesta
+  // =========================================================
 
-  /**
-   * Navega la respuesta JSON Endeca para encontrar el nodo Category_ResultsList.
-   * Retorna null si no lo encuentra.
-   */
+  /** Navega la respuesta JSON Endeca para encontrar Category_ResultsList. */
   function findResultsList(data) {
     const page = data?.contents?.[0];
     if (!page) return null;
@@ -204,94 +166,56 @@ window.CotoSorter.api = (function () {
     return null;
   }
 
-  /**
-   * Parsea un registro Endeca (attributes + detailsAction) al formato
-   * de producto usado por el módulo revista.
-   */
-  function parseEndecaRecord(innerRecord) {
-    const attr = innerRecord.attributes || {};
+  // ---- Parseo de registro individual ----
+
+  /** Extrae info básica del producto: nombre, imagen, precios, formato. */
+  function parseBasicInfo(attr) {
     const get = (key) => attr[key]?.[0] ?? null;
 
     const name = get("product.displayName") || get("sku.displayName") || "Producto";
     const imgSrc = get("product.largeImage.url") || get("product.mediumImage.url");
-    const activePriceRaw = parseFloat(get("sku.activePrice") || "0");
-    const refPriceRaw = parseFloat(get("sku.referencePrice") || "0");
+    const activePrice = parseFloat(get("sku.activePrice") || "0");
+    const referencePrice = parseFloat(get("sku.referencePrice") || "0");
     const cFormato = get("product.cFormato") || "";
     const unitType = cFormatoToUnitType(cFormato);
+    const priceText = formatApiPrice(activePrice);
 
-    // URL del producto: strip query del recordState, agregar prefijo de COTO
-    let href = null;
-    const recordState = innerRecord.detailsAction?.recordState;
-    if (recordState) {
-      const path = recordState.split("?")[0];
-      href = "https://www.cotodigital.com.ar/sitios/cdigi/productos" + path;
-    }
+    return { name, imgSrc, activePrice, referencePrice, unitType, priceText, get };
+  }
 
-    const priceText = formatApiPrice(activePriceRaw);
-
-    // ---- Parseo de dtoDescuentos ----
-    let dtoArr = [];
-    try { dtoArr = JSON.parse(get("product.dtoDescuentos") || "[]"); } catch { /* ignorar */ }
-
-    // ---- Cálculo de descuento para precio unitario ajustado ----
-    // La API provee en cada entrada de dtoDescuentos el campo `precioDescuento`
-    // que ya representa el precio efectivo por unidad al tomar el deal
-    // (ej: "70% 2da" con activePrice=$1900 → precioDescuento="$1235.00c/u",
-    //  que es el promedio de pagar $1900 + $570 para 2 unidades).
-    // Calculamos discountRatio = mejorPrecioEfectivo / activePrice y lo
-    // aplicamos sobre referencePrice para obtener el precio por L/kg correcto.
+  /** Calcula el ratio de descuento a partir de dtoDescuentos o listPrice. */
+  function calcDiscountRatio(dtoArr, activePrice, get, name) {
     let discountRatio = 1;
 
-    if (dtoArr.length > 0 && activePriceRaw > 0) {
+    if (dtoArr.length > 0 && activePrice > 0) {
       let bestEffectivePrice = Infinity;
       for (const dto of dtoArr) {
-        // precioDescuento puede ser "$1235.00c/u", "$3900.00", "$2502.50", etc.
-        // Extraer el primer número (formato US con punto decimal)
         const match = (dto.precioDescuento || "").match(/[\d]+(?:\.\d+)?/);
         const pd = match ? parseFloat(match[0]) : NaN;
         if (!isNaN(pd) && pd > 0 && pd < bestEffectivePrice) {
           bestEffectivePrice = pd;
         }
       }
-      if (bestEffectivePrice < Infinity && bestEffectivePrice < activePriceRaw) {
-        discountRatio = bestEffectivePrice / activePriceRaw;
-        debugLog(
-          `[discount] ${name}: bestPrecioDescuento=${bestEffectivePrice} / active=${activePriceRaw}` +
-          ` → ratio=${discountRatio.toFixed(4)}`
-        );
+      if (bestEffectivePrice < Infinity && bestEffectivePrice < activePrice) {
+        discountRatio = bestEffectivePrice / activePrice;
+        debugLog(`[discount] ${name}: bestPrecioDescuento=${bestEffectivePrice} / active=${activePrice} → ratio=${discountRatio.toFixed(4)}`);
       }
     }
 
-    // Fallback: sku.listPrice vs activePrice (por si acaso)
+    // Fallback: sku.listPrice vs activePrice
     if (discountRatio === 1) {
-      const listPriceRaw = parseFloat(get("sku.listPrice") || "0");
-      if (listPriceRaw > 0 && activePriceRaw > 0 && activePriceRaw < listPriceRaw) {
-        discountRatio = activePriceRaw / listPriceRaw;
-        debugLog(`[discount] ${name}: listPrice fallback=${listPriceRaw} → ratio=${discountRatio.toFixed(4)}`);
+      const listPrice = parseFloat(get("sku.listPrice") || "0");
+      if (listPrice > 0 && activePrice > 0 && activePrice < listPrice) {
+        discountRatio = activePrice / listPrice;
+        debugLog(`[discount] ${name}: listPrice fallback=${listPrice} → ratio=${discountRatio.toFixed(4)}`);
       }
     }
 
-    // Precio de referencia ajustado por descuento
-    const adjustedReferencePrice = (refPriceRaw > 0 && discountRatio < 0.999)
-      ? refPriceRaw * discountRatio
-      : refPriceRaw;
+    return discountRatio;
+  }
 
-    // Texto de precio unitario corto: "$/L", "$/kg", etc.
-    let unitPriceText = null;
-    if (refPriceRaw > 0 && unitType) {
-      const shortLabel = unitLabel(unitType);   // "L", "kg", "100g", "m²", "u"
-      const priceToShow = discountRatio < 0.999 ? adjustedReferencePrice : refPriceRaw;
-      unitPriceText = `$/${shortLabel}: ${formatApiPrice(priceToShow)}`;
-    }
-
-    // Precio efectivo con el mejor deal aplicado (para mostrar en revista)
-    const discountedPriceText = (discountRatio < 0.999)
-      ? formatApiPrice(activePriceRaw * discountRatio)
-      : null;
-
-    // Badges: solo los deals reales de dtoDescuentos (textoLlevando / textoDescuento).
-    // Se omite tipoOferta porque contiene frases genéricas como "Hasta X% DTO!!"
-    // que ya quedan implícitas en el precio ajustado.
+  /** Extrae badges de texto de dtoDescuentos. */
+  function parseBadges(dtoArr) {
     const badges = [];
     for (const dto of dtoArr) {
       if (dto.textoLlevando?.trim()) badges.push(dto.textoLlevando.trim());
@@ -299,30 +223,75 @@ window.CotoSorter.api = (function () {
         badges.push(dto.textoDescuento.trim());
       }
     }
+    return badges;
+  }
 
-    debugLog(
-      `Parsed: ${name} | price=${priceText} | unit=${unitPriceText} | ` +
-      `type=${unitType} | ratio=${discountRatio.toFixed(4)}`
-    );
+  /** Parsea un registro Endeca al formato de producto interno. */
+  function parseEndecaRecord(innerRecord) {
+    const attr = innerRecord.attributes || {};
+    const { name, imgSrc, activePrice, referencePrice, unitType, priceText, get } = parseBasicInfo(attr);
+
+    // URL del producto
+    let href = null;
+    const recordState = innerRecord.detailsAction?.recordState;
+    if (recordState) {
+      href = "https://www.cotodigital.com.ar/sitios/cdigi/productos" + recordState.split("?")[0];
+    }
+
+    // Descuentos
+    let dtoArr = [];
+    try { dtoArr = JSON.parse(get("product.dtoDescuentos") || "[]"); } catch { /* ignorar */ }
+
+    const discountRatio = calcDiscountRatio(dtoArr, activePrice, get, name);
+    const hasDiscount = discountRatio < 0.999;
+
+    // Precio de referencia ajustado
+    const adjustedReferencePrice = (referencePrice > 0 && hasDiscount)
+      ? referencePrice * discountRatio
+      : referencePrice;
+
+    // Texto de precio unitario
+    let unitPriceText = null;
+    if (referencePrice > 0 && unitType) {
+      const shortLabel = unitLabel(unitType);
+      const priceToShow = hasDiscount ? adjustedReferencePrice : referencePrice;
+      unitPriceText = `$/${shortLabel}: ${formatApiPrice(priceToShow)}`;
+    }
+
+    const discountedPriceText = hasDiscount ? formatApiPrice(activePrice * discountRatio) : null;
+    const badges = parseBadges(dtoArr);
+
+    debugLog(`Parsed: ${name} | price=${priceText} | unit=${unitPriceText} | type=${unitType} | ratio=${discountRatio.toFixed(4)}`);
 
     return {
       name, href, imgSrc, priceText, discountedPriceText, badges, unitPriceText, unitType,
-      activePrice: activePriceRaw,
-      referencePrice: refPriceRaw,
-      adjustedReferencePrice,
-      discountRatio,
+      activePrice, referencePrice, adjustedReferencePrice, discountRatio,
     };
   }
 
-  // ---- Scraping ----
+  // =========================================================
+  // Scraping
+  // =========================================================
+
+  /** Extrae productos de un resultsList Endeca. */
+  function extractProductsFromResultsList(resultsList) {
+    const products = [];
+    for (const outerRecord of resultsList?.records || []) {
+      for (const innerRecord of outerRecord.records || []) {
+        try { products.push(parseEndecaRecord(innerRecord)); }
+        catch (e) { debugLog("Error parsing record:", e); }
+      }
+    }
+    return products;
+  }
 
   /**
    * Obtiene TODOS los productos de la API Endeca en batches paralelos.
-   * El primer request descubre totalNumRecs, luego fetcha el resto en paralelo.
    * @param {Function} progressCallback — (loaded, total) => void
    */
   async function scrapeAllPages(progressCallback) {
     const BATCH = 50;
+    const PARALLEL = 3;
 
     debugLog("Fetching first batch from JSON API...");
     const firstUrl = buildApiUrl(0, BATCH);
@@ -342,26 +311,18 @@ window.CotoSorter.api = (function () {
 
     const totalNumRecs = resultsList.totalNumRecs || 0;
     debugLog(`Total products from API: ${totalNumRecs}`);
-
     if (progressCallback) progressCallback(0, totalNumRecs);
 
-    const allProducts = [];
-    for (const outerRecord of resultsList.records || []) {
-      for (const innerRecord of outerRecord.records || []) {
-        try { allProducts.push(parseEndecaRecord(innerRecord)); }
-        catch (e) { debugLog("Error parsing record:", e); }
-      }
-    }
-
+    const allProducts = extractProductsFromResultsList(resultsList);
     if (progressCallback) progressCallback(allProducts.length, totalNumRecs);
     debugLog(`First batch: ${allProducts.length}/${totalNumRecs} products`);
 
+    // Fetch remaining batches in parallel groups
     const remainingOffsets = [];
     for (let offset = BATCH; offset < totalNumRecs; offset += BATCH) {
       remainingOffsets.push(offset);
     }
 
-    const PARALLEL = 3;
     for (let i = 0; i < remainingOffsets.length; i += PARALLEL) {
       const group = remainingOffsets.slice(i, i + PARALLEL);
       const results = await Promise.all(
@@ -371,15 +332,7 @@ window.CotoSorter.api = (function () {
           const resp = await fetch(url, { credentials: "same-origin" });
           if (!resp.ok) throw new Error(`API error ${resp.status} at offset ${offset}`);
           const data = await resp.json();
-          const rl = findResultsList(data);
-          const products = [];
-          for (const outerRecord of rl?.records || []) {
-            for (const innerRecord of outerRecord.records || []) {
-              try { products.push(parseEndecaRecord(innerRecord)); }
-              catch (e) { debugLog("Error parsing record:", e); }
-            }
-          }
-          return products;
+          return extractProductsFromResultsList(findResultsList(data));
         })
       );
 

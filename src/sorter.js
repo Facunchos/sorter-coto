@@ -1,7 +1,4 @@
-// ===========================================================
 // sorter.js — Ordenamiento de productos en pantalla
-// Dependencias: badges, logger
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.sorter = (function () {
@@ -10,23 +7,17 @@ window.CotoSorter.sorter = (function () {
   const { debugLog } = window.CotoSorter.logger;
   const { extractProductData, injectAllBadges, removeAllBadges } = window.CotoSorter.badges;
 
-  // ---- Estado interno ----
   let isSorting = false;
   let currentFilter = null;
   const originalOrder = new Map();
   let originalOrderSaved = false;
 
-  // ---- Getters de estado (para el observer en content.js) ----
   function getIsSorting() { return isSorting; }
   function getCurrentFilter() { return currentFilter; }
 
-  // ---- Sorting ----
-
   /**
-   * Ordena los cards de producto por precio unitario ajustado (ascendente).
-   * Los productos sin el tipo de unidad indicado se dejan al final.
-   * @param {string} filterType — "weight" | "volume" | "100g" | "square" | "unit"
-   * @param {Function} [onComplete] — callback opcional luego de ordenar (ej. updateButtonStates)
+   * Ordena los cards por precio unitario ajustado (ascendente).
+   * Productos sin el tipo indicado quedan al final.
    */
   function sortProducts(filterType, onComplete) {
     const container = document.querySelector(".productos.row");
@@ -83,10 +74,7 @@ window.CotoSorter.sorter = (function () {
     requestAnimationFrame(() => { isSorting = false; });
   }
 
-  /**
-   * Restablece los productos a su orden original.
-   * @param {Function} [onComplete] — callback opcional (ej. updateButtonStates)
-   */
+  /** Restablece los productos a su orden original. */
   function resetOrder(onComplete) {
     if (!originalOrderSaved) return;
 

@@ -1,7 +1,4 @@
-// ===========================================================
 // revista.js — Agrupación, generación de PDF y flujo de revista
-// Dependencias: utils, logger, api
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.revista = (function () {
@@ -11,12 +8,9 @@ window.CotoSorter.revista = (function () {
   const { detectUnitTypeFromProduct, unitTypeSeparatorLabel } = window.CotoSorter.utils;
   const { scrapeAllPages } = window.CotoSorter.api;
 
-  // ---- Agrupación y ordenamiento ----
-
   /**
-   * Agrupa productos por tipo de unidad y ordena cada grupo de menor a mayor precio.
-   * Orden de grupos: Kg → L → 100g → m² → Unidad → Sin categoría
-   * @returns {{ unitType: string|null, label: string, products: object[] }[]}
+   * Agrupa productos por tipo de unidad y ordena cada grupo de menor a mayor.
+   * Orden: Kg → L → 100g → m² → Unidad → Sin categoría
    */
   function groupAndSortProducts(products) {
     const ORDER = ["weight", "volume", "100g", "square", "unit", null];
@@ -28,9 +22,7 @@ window.CotoSorter.revista = (function () {
       groups.get(type).push(p);
     }
 
-    // Ordenar cada grupo por precio unitario ascendente.
-    // Se prioriza adjustedReferencePrice (descuento calculado matemáticamente)
-    // sobre referencePrice (precio listado por la página sin aplicar promos).
+    // Ordenar cada grupo por precio unitario ascendente
     for (const [type, prods] of groups) {
       prods.sort((a, b) => {
         const priceA = type
@@ -59,9 +51,7 @@ window.CotoSorter.revista = (function () {
 
   // ---- Descarga de imágenes ----
 
-  /**
-   * Descarga una imagen y retorna su base64 data URL. Null si falla.
-   */
+  /** Descarga una imagen y retorna su base64 data URL. Null si falla. */
   async function fetchImageAsBase64(url) {
     try {
       const resp = await fetch(url, { credentials: "same-origin" });
@@ -78,14 +68,34 @@ window.CotoSorter.revista = (function () {
     }
   }
 
+  /** Pre-carga imágenes en batches paralelos. Retorna cache {url: base64}. */
+  async function preloadImages(products, progressCallback) {
+    const IMG_BATCH = 8;
+    const imageCache = {};
+
+    if (progressCallback) progressCallback("imgs", 0, 1);
+
+    for (let i = 0; i < products.length; i += IMG_BATCH) {
+      const batch = products.slice(i, i + IMG_BATCH);
+      const results = await Promise.all(
+        batch.map((p) => (p.imgSrc ? fetchImageAsBase64(p.imgSrc) : Promise.resolve(null)))
+      );
+      for (let j = 0; j < batch.length; j++) {
+        if (results[j]) imageCache[batch[j].imgSrc] = results[j];
+      }
+      if (progressCallback) {
+        progressCallback("imgs", Math.min(i + IMG_BATCH, products.length), products.length);
+      }
+    }
+
+    return imageCache;
+  }
+
   // ---- Generación de PDF ----
 
   /**
-   * Genera el PDF "revista" con todos los productos agrupados por categoría.
-   * Cada grupo comienza con una página separadora a pantalla completa,
-   * seguida por páginas de productos ordenados por precio ascendente.
-   * @param {object[]} products — lista completa de productos
-   * @param {Function} progressCallback — (stage: "imgs"|"pdf", current, total) => void
+   * Genera el PDF "revista" con productos agrupados por categoría.
+   * Cada grupo comienza con una página separadora seguida de páginas de productos.
    */
   async function generateRevistaPDF(products, progressCallback) {
     const { jsPDF } = window.jspdf;
@@ -94,12 +104,10 @@ window.CotoSorter.revista = (function () {
       return;
     }
 
-    // A4 apaisado
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();  // ~297
-    const pageH = doc.internal.pageSize.getHeight(); // ~210
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
 
-    // Config de layout
     const COLS = 6;
     const MARGIN = 10;
     const HEADER_H = 18;
@@ -113,29 +121,15 @@ window.CotoSorter.revista = (function () {
     const groups = groupAndSortProducts(products);
     debugLog(`Grouped into ${groups.length} categories for PDF`);
 
-    // Calcular total de páginas: 1 separadora + páginas de productos por grupo
+    // Calcular total de páginas
     let totalPdfPages = 0;
     for (const group of groups) {
       totalPdfPages += 1;
       totalPdfPages += Math.ceil(group.products.length / PRODUCTS_PER_PAGE);
     }
 
-    // Pre-cargar imágenes en batches
-    if (progressCallback) progressCallback("imgs", 0, 1);
-    const imageCache = {};
-    const IMG_BATCH = 8;
-    for (let i = 0; i < products.length; i += IMG_BATCH) {
-      const batch = products.slice(i, i + IMG_BATCH);
-      const results = await Promise.all(
-        batch.map((p) => (p.imgSrc ? fetchImageAsBase64(p.imgSrc) : Promise.resolve(null)))
-      );
-      for (let j = 0; j < batch.length; j++) {
-        if (results[j]) imageCache[batch[j].imgSrc] = results[j];
-      }
-      if (progressCallback) {
-        progressCallback("imgs", Math.min(i + IMG_BATCH, products.length), products.length);
-      }
-    }
+    // Pre-cargar imágenes
+    const imageCache = await preloadImages(products, progressCallback);
 
     // ---- Helpers de dibujo ----
 
@@ -218,13 +212,6 @@ window.CotoSorter.revista = (function () {
 
       // Fila "Regular:"
       doc.setFontSize(6);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(120, 120, 120);
-      doc.text("Regular:", x + 2, curY);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(hasDiscount ? 160 : 226, hasDiscount ? 160 : 0, hasDiscount ? 160 : 37);
-      doc.text(p.priceText || "", x + 2 + doc.getTextWidth("Regular: "), curY);
-      curY += 4.5;
 
       // Fila "c/desc.:" — solo si hay descuento
       if (hasDiscount) {
@@ -233,12 +220,12 @@ window.CotoSorter.revista = (function () {
         doc.setTextColor(120, 120, 120);
         doc.text("c/desc.:", x + 2, curY);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 160, 60);   // verde
+        doc.setTextColor(0, 160, 60);
         doc.text(p.discountedPriceText, x + 2 + doc.getTextWidth("c/desc.: "), curY);
         curY += 4.5;
       }
 
-      // Badges de oferta — debajo de los precios
+      // Badges de oferta
       if (p.badges.length > 0) {
         const BADGE_H = 4.5;
         const BADGE_PAD_X = 2;
@@ -256,7 +243,7 @@ window.CotoSorter.revista = (function () {
         doc.text(badgeText, x + 2 + BADGE_PAD_X, curY + BADGE_H - 1.2);
       }
 
-      // Precio por L/kg — pie de celda, azul bold
+      // Precio por L/kg — pie de celda
       if (p.unitPriceText) {
         doc.setFontSize(7);
         doc.setFont("helvetica", "bold");
@@ -266,7 +253,7 @@ window.CotoSorter.revista = (function () {
         doc.text(upt, x + 2, y + CELL_H - 2.5);
       }
 
-      // Link clickeable sobre toda la celda
+      // Link clickeable
       if (p.href) {
         doc.link(x, y, cellW, CELL_H, { url: p.href });
       }
@@ -311,11 +298,7 @@ window.CotoSorter.revista = (function () {
 
   // ---- Flujo principal ----
 
-  /**
-   * Flujo completo: scraping → PDF.
-   * @param {number|null} maxCount — límite de productos, null para todos
-   * @param {Function} updateProgressFn — (text, pct) => void (viene de ui.js)
-   */
+  /** Flujo completo: scraping → PDF. */
   async function startRevistaGeneration(maxCount, updateProgressFn) {
     try {
       debugLog("Starting Revista Promos generation...");
@@ -363,11 +346,7 @@ window.CotoSorter.revista = (function () {
     }
   }
 
-  /**
-   * Flujo completo: scraping → Vista HTML en nueva pestaña.
-   * @param {number|null} maxCount — límite de productos, null para todos
-   * @param {Function} updateProgressFn — (text, pct) => void (viene de ui.js)
-   */
+  /** Flujo completo: scraping → Vista HTML en nueva pestaña. */
   async function startRevistaHTMLGeneration(maxCount, updateProgressFn) {
     try {
       debugLog("Starting Revista HTML generation...");

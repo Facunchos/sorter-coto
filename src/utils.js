@@ -1,12 +1,9 @@
-// ===========================================================
 // utils.js — Constantes, parsers y normalizadores de tipo
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.utils = (function () {
   "use strict";
 
-  // ---- Constants ----
   const DEBOUNCE_MS = 400;
   const BADGE_CLASS = "coto-sorter-badge";
   const BADGE_ATTR = "data-coto-sorter-processed";
@@ -14,7 +11,6 @@ window.CotoSorter.utils = (function () {
     /Precio\s+por\s+(?:1|100)\s+(Kilo(?:gramo)?(?:\s+escurrido)?|Litro|[Gg]ramos?|[Cc]uadrado|[Uu]nidad)\s*:\s*\$([\d\.,]+)/i;
   const UNIT_QTY_REGEX = /Precio\s+por\s+(1|100)\s+/i;
 
-  // All available filter types with labels (used by sorter UI y sorter lógica)
   const FILTER_TYPES = [
     { key: "weight",  label: "$/Kg ↑",     title: "Ordenar por precio real por kilogramo" },
     { key: "volume",  label: "$/L ↑",      title: "Ordenar por precio real por litro" },
@@ -23,12 +19,7 @@ window.CotoSorter.utils = (function () {
     { key: "unit",    label: "$/Unidad ↑", title: "Ordenar por precio por unidad" },
   ];
 
-  // ---- Price Parsers ----
-
-  /**
-   * Parsea precio en formato argentino a Number.
-   * "$3.950,00" -> 3950.00 | "899,00" -> 899.00
-   */
+  /** Parsea precio argentino ("$3.950,00") a Number. */
   function parsePrice(raw) {
     if (raw == null) return NaN;
     const cleaned = String(raw)
@@ -39,9 +30,7 @@ window.CotoSorter.utils = (function () {
     return parseFloat(cleaned);
   }
 
-  /**
-   * Formatea número a precio argentino: 1348.47 -> "$1.348,47"
-   */
+  /** Formatea número a precio argentino: 1348.47 → "$1.348,47" */
   function formatPrice(num) {
     if (isNaN(num)) return "—";
     const parts = num.toFixed(2).split(".");
@@ -49,9 +38,7 @@ window.CotoSorter.utils = (function () {
     return "$" + intPart + "," + parts[1];
   }
 
-  /**
-   * Formatea precio numérico raw (de API) a "$X.XXX,XX". Null si falla.
-   */
+  /** Formatea precio de API a "$X.XXX,XX". Null si falla. */
   function formatApiPrice(raw) {
     const num = parseFloat(String(raw).replace(",", "."));
     if (isNaN(num)) return null;
@@ -60,13 +47,7 @@ window.CotoSorter.utils = (function () {
     return "$" + intPart + "," + parts[1];
   }
 
-  // ---- Unit Type Normalization ----
-
-  /**
-   * Normaliza texto de unidad a categoría interna.
-   * "Kilo"/"Kilogramo escurrido" → "weight" | "Litro" → "volume"
-   * "Gramos" (qty=100) → "100g" | "Cuadrado" → "square" | "Unidad" → "unit"
-   */
+  /** Normaliza texto de unidad del DOM a tipo interno ("weight", "volume", etc). */
   function normalizeUnitType(unitText, qty) {
     const lower = unitText.toLowerCase().trim();
     if (lower.startsWith("kilo")) return "weight";
@@ -77,11 +58,7 @@ window.CotoSorter.utils = (function () {
     return null;
   }
 
-  /**
-   * Normaliza string cFormato de la API Endeca a tipo interno.
-   * "Kilo"/"Kilogramo" → "weight" | "Litro" → "volume"
-   * "100 Gramos" → "100g" | "Metro Cuadrado" → "square" | "Unidad" → "unit"
-   */
+  /** Normaliza cFormato de API Endeca a tipo interno. */
   function cFormatoToUnitType(cFormato) {
     if (!cFormato) return null;
     const f = cFormato.trim().toLowerCase();
@@ -93,7 +70,7 @@ window.CotoSorter.utils = (function () {
     return null;
   }
 
-  /** Label corto para mostrar en badge: "kg", "L", "100g", "m²", "u" */
+  /** Label corto: "kg", "L", "100g", "m²", "u" */
   function unitLabel(unitType) {
     switch (unitType) {
       case "weight":  return "kg";
@@ -105,7 +82,7 @@ window.CotoSorter.utils = (function () {
     }
   }
 
-  /** Texto para la página separadora del PDF por categoría. */
+  /** Texto largo para separadores de PDF/HTML. */
   function unitTypeSeparatorLabel(unitType) {
     switch (unitType) {
       case "weight":  return "Precio por 1 Kg";
@@ -117,10 +94,7 @@ window.CotoSorter.utils = (function () {
     }
   }
 
-  /**
-   * Detecta el tipo de unidad de un producto.
-   * Productos de la API tienen `unitType` directo; fallback a unitPriceText.
-   */
+  /** Detecta tipo de unidad de un producto (API directa o fallback a texto). */
   function detectUnitTypeFromProduct(product) {
     if (product.unitType) return product.unitType;
     if (!product.unitPriceText) return null;

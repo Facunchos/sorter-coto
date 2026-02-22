@@ -1,17 +1,4 @@
-// ===========================================================
 // Coto Sorter — Content Script (Entry Point)
-// Inicialización, MutationObserver y coordinación de módulos.
-//
-// Módulos cargados antes de este archivo (ver manifest.json):
-//   lib/jspdf.umd.min.js
-//   src/utils.js    → CotoSorter.utils
-//   src/logger.js   → CotoSorter.logger
-//   src/badges.js   → CotoSorter.badges
-//   src/sorter.js   → CotoSorter.sorter
-//   src/api.js      → CotoSorter.api
-//   src/revista.js  → CotoSorter.revista
-//   src/ui.js       → CotoSorter.ui
-// ===========================================================
 (function () {
   "use strict";
 
@@ -68,13 +55,13 @@
   // ---- Inicialización ----
 
   function init() {
-    debugLog("Initializing Coto Sorter extension");
+    debugLog("Initializing Coto Sorter");
 
     setupApiUrlCapture();
     injectUI();
     setupObserver();
 
-    // Inyectar badges iniciales luego de que Angular termine de renderizar
+    // Inyectar badges iniciales tras render de Angular
     setTimeout(() => {
       const products = document.querySelectorAll(".producto-card");
       if (products.length > 0) {

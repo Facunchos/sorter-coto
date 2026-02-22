@@ -1,7 +1,4 @@
-// ===========================================================
 // vistaLigera.js — Generación de vista HTML ligera de productos
-// Dependencias: revista (groupAndSortProducts)
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.vistaLigera = (function () {

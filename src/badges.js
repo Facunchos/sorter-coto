@@ -1,7 +1,4 @@
-// ===========================================================
 // badges.js — Extracción de datos de producto e inyección de badges
-// Dependencias: utils, logger
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.badges = (function () {
@@ -11,14 +8,8 @@ window.CotoSorter.badges = (function () {
           parsePrice, formatPrice, normalizeUnitType, unitLabel } = window.CotoSorter.utils;
   const { debugLog } = window.CotoSorter.logger;
 
-  // ---- Product Data Extraction ----
-
-  /**
-   * Extrae datos de precio de un elemento producto del DOM.
-   * Retorna objeto con precio unitario ajustado, o null si no disponible.
-   */
+  /** Extrae datos de precio unitario ajustado de un elemento producto del DOM. */
   function extractProductData(productEl) {
-    // 1. Buscar texto de precio unitario en elementos <small>
     const smalls = productEl.querySelectorAll("small");
     let unitMatch = null;
     let qtyStr = "1";
@@ -44,11 +35,11 @@ window.CotoSorter.badges = (function () {
     const listedUnitPrice = parsePrice(rawUnitPrice);
     if (isNaN(listedUnitPrice) || listedUnitPrice <= 0) return null;
 
-    // 2. Precio mostrado (lo que pagás) desde h4.card-title
+    // Precio mostrado (lo que pagás)
     const h4 = productEl.querySelector("h4.card-title");
     const displayedPrice = h4 ? parsePrice(h4.textContent) : NaN;
 
-    // 3. Precio regular — fuente primaria: atributo data-cnstrc-item-price
+    // Precio regular — fuente primaria: data-cnstrc-item-price
     const cardContainer = productEl.querySelector("[data-cnstrc-item-price]");
     let regularPrice = NaN;
 
@@ -72,16 +63,15 @@ window.CotoSorter.badges = (function () {
       regularPrice = displayedPrice;
     }
 
-    // 4. Ratio de descuento
+    // Ratio de descuento
     let discountRatio = 1;
     if (!isNaN(displayedPrice) && displayedPrice > 0 && regularPrice > 0) {
       discountRatio = displayedPrice / regularPrice;
     }
 
-    // 5. Precio unitario ajustado por descuento
+    // Precio unitario ajustado
     const adjustedUnitPrice = listedUnitPrice * discountRatio;
 
-    // 6. Nombre para debug
     const nameEl = productEl.querySelector("h3.nombre-producto");
     const name = nameEl ? nameEl.textContent.trim() : "(unknown)";
 
@@ -105,9 +95,7 @@ window.CotoSorter.badges = (function () {
 
   // ---- Badge Injection ----
 
-  /**
-   * Inyecta o actualiza el badge de precio en un card wrapper.
-   */
+  /** Inyecta o actualiza el badge de precio en un card wrapper. */
   function injectBadgeOnProduct(wrapper) {
     const productEl = wrapper.querySelector("catalogue-product");
     if (!productEl) return;

@@ -1,6 +1,4 @@
-// ===========================================================
-// logger.js — Debug logging y flag de activación
-// ===========================================================
+// logger.js — Debug logging controlado por chrome.storage
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.logger = (function () {
@@ -27,7 +25,6 @@ window.CotoSorter.logger = (function () {
         }
       });
     } catch {
-      // Fuera del contexto de extensión (ej. testing) — ignorar
       debugEnabled = false;
     }
   }

@@ -1,7 +1,4 @@
-// ===========================================================
 // ui.js — Inyección del panel flotante y controles
-// Dependencias: utils, logger, sorter, revista
-// ===========================================================
 window.CotoSorter = window.CotoSorter || {};
 
 window.CotoSorter.ui = (function () {
@@ -12,17 +9,15 @@ window.CotoSorter.ui = (function () {
   const { sortProducts, resetOrder } = window.CotoSorter.sorter;
   const { startRevistaGeneration, startRevistaHTMLGeneration } = window.CotoSorter.revista;
 
-  // ---- Estado interno ----
   let panelEl = null;
   const filterDropdownItems = {};
   let btnOrdenar = null;
 
-  // ---- Barra de progreso ----
+  // =========================================================
+  // Progreso y estado
+  // =========================================================
 
-  /**
-   * Muestra, actualiza u oculta el indicador de progreso.
-   * Pasar text=null para ocultar.
-   */
+  /** Muestra, actualiza u oculta el indicador de progreso (text=null para ocultar). */
   function updateProgress(text, pct) {
     const el = document.querySelector(".coto-sorter-progress");
     if (!el) return;
@@ -40,8 +35,6 @@ window.CotoSorter.ui = (function () {
     if (barEl) barEl.style.width = Math.round(pct) + "%";
   }
 
-  // ---- Estado de botones ----
-
   function updateButtonStates(currentFilter) {
     for (const ft of FILTER_TYPES) {
       const item = filterDropdownItems[ft.key];
@@ -54,7 +47,9 @@ window.CotoSorter.ui = (function () {
     }
   }
 
-  // ---- Dragging ----
+  // =========================================================
+  // Dragging
+  // =========================================================
 
   function makeDraggable(el, handle) {
     let isDragging = false;
@@ -87,15 +82,11 @@ window.CotoSorter.ui = (function () {
     });
   }
 
-  // ---- Inyección del panel ----
+  // =========================================================
+  // Builders de componentes UI
+  // =========================================================
 
-  function injectUI() {
-    if (document.querySelector(".coto-sorter-panel")) return;
-
-    panelEl = document.createElement("div");
-    panelEl.className = "coto-sorter-panel";
-
-    // Header (drag handle)
+  function createHeader() {
     const header = document.createElement("div");
     header.className = "coto-sorter-header";
 
@@ -116,22 +107,20 @@ window.CotoSorter.ui = (function () {
 
     header.appendChild(title);
     header.appendChild(minimizeBtn);
+    return header;
+  }
 
-    // Contenedor de botones
-    const buttons = document.createElement("div");
-    buttons.className = "coto-sorter-buttons";
-
-    // ---- Ordenar + dropdown ----
-    const ordenarWrap = document.createElement("div");
-    ordenarWrap.className = "coto-sorter-generate-wrap";
+  function createOrdenarDropdown() {
+    const wrap = document.createElement("div");
+    wrap.className = "coto-sorter-generate-wrap";
 
     btnOrdenar = document.createElement("button");
     btnOrdenar.className = "coto-sorter-btn";
     btnOrdenar.textContent = "Ordenar";
     btnOrdenar.title = "Elegir criterio de ordenamiento";
 
-    const ordenarDropdown = document.createElement("div");
-    ordenarDropdown.className = "coto-sorter-dropdown";
+    const dropdown = document.createElement("div");
+    dropdown.className = "coto-sorter-dropdown";
 
     for (const ft of FILTER_TYPES) {
       const item = document.createElement("button");
@@ -139,36 +128,37 @@ window.CotoSorter.ui = (function () {
       item.textContent = ft.label;
       item.title = ft.title + " (menor a mayor)";
       item.addEventListener("click", () => {
-        ordenarDropdown.classList.remove("coto-sorter-dropdown-open");
+        dropdown.classList.remove("coto-sorter-dropdown-open");
         debugLog(`Ordenar dropdown: Sort by ${ft.key}`);
         sortProducts(ft.key, () => updateButtonStates(ft.key));
       });
       filterDropdownItems[ft.key] = item;
-      ordenarDropdown.appendChild(item);
+      dropdown.appendChild(item);
     }
 
     btnOrdenar.addEventListener("click", () => {
-      ordenarDropdown.classList.toggle("coto-sorter-dropdown-open");
+      dropdown.classList.toggle("coto-sorter-dropdown-open");
     });
 
-    ordenarWrap.appendChild(btnOrdenar);
-    ordenarWrap.appendChild(ordenarDropdown);
-    buttons.appendChild(ordenarWrap);
+    wrap.appendChild(btnOrdenar);
+    wrap.appendChild(dropdown);
+    return wrap;
+  }
 
-    // ---- Generar + dropdown ----
-    const generateWrap = document.createElement("div");
-    generateWrap.className = "coto-sorter-generate-wrap";
+  function createGenerarDropdown() {
+    const wrap = document.createElement("div");
+    wrap.className = "coto-sorter-generate-wrap";
 
     const btnGenerar = document.createElement("button");
     btnGenerar.className = "coto-sorter-btn";
     btnGenerar.textContent = "Generar";
     btnGenerar.title = "Generar documentos a partir de los productos";
 
-    const genDropdown = document.createElement("div");
-    genDropdown.className = "coto-sorter-dropdown";
+    const dropdown = document.createElement("div");
+    dropdown.className = "coto-sorter-dropdown";
 
     btnGenerar.addEventListener("click", () => {
-      genDropdown.classList.toggle("coto-sorter-dropdown-open");
+      dropdown.classList.toggle("coto-sorter-dropdown-open");
     });
 
     // Selector de cantidad
@@ -183,31 +173,32 @@ window.CotoSorter.ui = (function () {
     countInput.placeholder = "ALL";
     countInput.title = "Dejar vacío para todos los productos";
 
-    genDropdown.appendChild(countLabel);
-    genDropdown.appendChild(countInput);
+    dropdown.appendChild(countLabel);
+    dropdown.appendChild(countInput);
 
+    const getCount = () => countInput.value ? parseInt(countInput.value, 10) : null;
+
+    // Revista PDF
     const itemRevista = document.createElement("button");
     itemRevista.className = "coto-sorter-dropdown-item";
     itemRevista.textContent = "📰 Revista Promos";
     itemRevista.title = "Genera un PDF con todos los productos de todas las páginas";
     itemRevista.addEventListener("click", () => {
-      genDropdown.classList.remove("coto-sorter-dropdown-open");
-      const count = countInput.value ? parseInt(countInput.value, 10) : null;
-      startRevistaGeneration(count, updateProgress);
+      dropdown.classList.remove("coto-sorter-dropdown-open");
+      startRevistaGeneration(getCount(), updateProgress);
     });
+    dropdown.appendChild(itemRevista);
 
-    genDropdown.appendChild(itemRevista);
-
+    // Vista Ligera HTML
     const itemHTML = document.createElement("button");
     itemHTML.className = "coto-sorter-dropdown-item";
     itemHTML.textContent = "⚡ Vista Ligera";
     itemHTML.title = "Abre una pestaña con los productos en HTML — sin descargar archivos";
     itemHTML.addEventListener("click", () => {
-      genDropdown.classList.remove("coto-sorter-dropdown-open");
-      const count = countInput.value ? parseInt(countInput.value, 10) : null;
-      startRevistaHTMLGeneration(count, updateProgress);
+      dropdown.classList.remove("coto-sorter-dropdown-open");
+      startRevistaHTMLGeneration(getCount(), updateProgress);
     });
-    genDropdown.appendChild(itemHTML);
+    dropdown.appendChild(itemHTML);
 
     // Indicador de progreso
     const progressEl = document.createElement("div");
@@ -219,34 +210,55 @@ window.CotoSorter.ui = (function () {
       </div>
     `;
 
-    generateWrap.appendChild(btnGenerar);
-    generateWrap.appendChild(genDropdown);
-    generateWrap.appendChild(progressEl);
-    buttons.appendChild(generateWrap);
+    wrap.appendChild(btnGenerar);
+    wrap.appendChild(dropdown);
+    wrap.appendChild(progressEl);
+    return wrap;
+  }
 
-    // ---- Reset ----
-    const btnReset = document.createElement("button");
-    btnReset.className = "coto-sorter-btn coto-sorter-btn-reset";
-    btnReset.textContent = "Reset";
-    btnReset.title = "Restaurar orden original y remover badges";
-    btnReset.addEventListener("click", () => {
+  function createResetButton() {
+    const btn = document.createElement("button");
+    btn.className = "coto-sorter-btn coto-sorter-btn-reset";
+    btn.textContent = "Reset";
+    btn.title = "Restaurar orden original y remover badges";
+    btn.addEventListener("click", () => {
       debugLog("Button clicked: Reset");
       resetOrder(() => updateButtonStates(null));
     });
-    buttons.appendChild(btnReset);
+    return btn;
+  }
 
-    // ---- Separador ----
+  function createOpinionesButton() {
+    const btn = document.createElement("button");
+    btn.className = "coto-sorter-btn coto-sorter-btn-opiniones";
+    btn.textContent = "Opiniones!";
+    btn.title = "Próximamente";
+    btn.disabled = true;
+    return btn;
+  }
+
+  // =========================================================
+  // Inyección del panel
+  // =========================================================
+
+  function injectUI() {
+    if (document.querySelector(".coto-sorter-panel")) return;
+
+    panelEl = document.createElement("div");
+    panelEl.className = "coto-sorter-panel";
+
+    const header = createHeader();
+    const buttons = document.createElement("div");
+    buttons.className = "coto-sorter-buttons";
+
+    buttons.appendChild(createOrdenarDropdown());
+    buttons.appendChild(createGenerarDropdown());
+    buttons.appendChild(createResetButton());
+
     const separator = document.createElement("hr");
     separator.className = "coto-sorter-separator";
     buttons.appendChild(separator);
-
-    // ---- Opiniones (próximamente) ----
-    const btnOpiniones = document.createElement("button");
-    btnOpiniones.className = "coto-sorter-btn coto-sorter-btn-opiniones";
-    btnOpiniones.textContent = "Opiniones!";
-    btnOpiniones.title = "Próximamente";
-    btnOpiniones.disabled = true;
-    buttons.appendChild(btnOpiniones);
+    buttons.appendChild(createOpinionesButton());
 
     panelEl.appendChild(header);
     panelEl.appendChild(buttons);
