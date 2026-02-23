@@ -6,8 +6,10 @@ window.CotoSorter.vistaLigera = (function () {
 
   // ---- Helpers de construcción HTML ----
 
-  function buildCardHTML(p) {
+  function buildCardHTML(p, groupUnitType) {
     const safeName = (p.name || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    const safeUnitType = (p.unitType || groupUnitType || "").toString();
+    const isDobleHoja = /doble\s+hoja/i.test(p.name || "");
 
     const imgTag = p.imgSrc
       ? `<img src="${p.imgSrc}" alt="" loading="lazy" onerror="this.style.display='none'">`
@@ -30,11 +32,12 @@ window.CotoSorter.vistaLigera = (function () {
     const attrs = [
       `class="card-link"`,
       `data-name="${safeName.toLowerCase()}"`,
+      `data-unit="${safeUnitType}"`,
       p.href ? `href="${p.href}" target="_blank"` : "",
     ].filter(Boolean).join(" ");
 
     return `<${tag} ${attrs}>
-  <div class="card">
+  <div class="card${isDobleHoja ? " card-doble-hoja" : ""}">
     <div class="card-img">${imgTag}</div>
     <div class="card-info">
       <div class="card-name">${p.name || "Producto"}</div>
@@ -49,7 +52,7 @@ window.CotoSorter.vistaLigera = (function () {
 
   function buildGroupHTML(group) {
     const count = group.products.length;
-    const cardsHTML = group.products.map(buildCardHTML).join("\n");
+    const cardsHTML = group.products.map((p) => buildCardHTML(p, group.unitType)).join("\n");
     return `<section class="group">
   <div class="group-separator" role="button" title="Colapsar/expandir sección">
     <span class="group-label">${group.label}</span>
@@ -127,6 +130,26 @@ window.CotoSorter.vistaLigera = (function () {
     .search-clear.visible { display: block; }
     .search-count { font-size: 11px; opacity: .8; white-space: nowrap; min-width: 60px; text-align: right; }
 
+    .unit-filter-wrap {
+      min-width: 180px;
+      max-width: 240px;
+    }
+    .unit-filter {
+      width: 100%;
+      padding: 7px 10px;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      outline: none;
+      background: rgba(255,255,255,.18);
+      color: #fff;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .unit-filter:focus { background: rgba(255,255,255,.28); }
+    .unit-filter option { color: #222; }
+
     /* ---- Grupos ---- */
     .group { margin: 0 0 32px; }
     .group.empty { display: none; }
@@ -182,6 +205,9 @@ window.CotoSorter.vistaLigera = (function () {
       height: 100%;
       display: flex;
       flex-direction: column;
+    }
+    .card.card-doble-hoja {
+      background: #a1bbdf;
     }
     .card-link:hover .card {
       box-shadow: 0 4px 16px rgba(226,0,37,.18);
@@ -246,6 +272,7 @@ window.CotoSorter.vistaLigera = (function () {
         border-bottom: 2px solid #e20025;
       }
       .search-wrap, .search-count, .group-collapse-btn { display: none !important; }
+      .unit-filter-wrap { display: none !important; }
       .group { break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
       .group-separator {
         background: #fff;
@@ -269,6 +296,7 @@ window.CotoSorter.vistaLigera = (function () {
   const SEARCH_SCRIPT = `
     (function () {
       var input   = document.getElementById('search-input');
+      var unitSelect = document.getElementById('unit-filter');
       var clearBtn = document.getElementById('search-clear');
       var countEl = document.getElementById('search-count');
       var cards   = Array.from(document.querySelectorAll('.card-link'));
@@ -286,25 +314,30 @@ window.CotoSorter.vistaLigera = (function () {
           : visible + ' de ' + span.dataset.orig;
       }
 
-      function filter(q) {
+      function filter(q, selectedUnit) {
         var term = q.trim().toLowerCase();
         var normalizedTerm = term.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+        var selected = selectedUnit || '';
         var visibleCount = 0;
         cards.forEach(function (card) {
           var name = (card.dataset.name || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
-          var match = !normalizedTerm || name.includes(normalizedTerm);
+          var unit = card.dataset.unit || '';
+          var matchName = !normalizedTerm || name.includes(normalizedTerm);
+          var matchUnit = !selected || unit === selected;
+          var match = matchName && matchUnit;
           card.classList.toggle('hidden', !match);
           if (match) visibleCount++;
         });
         groups.forEach(updateGroup);
         clearBtn.classList.toggle('visible', !!term);
-        countEl.textContent = term
+        countEl.textContent = (term || selected)
           ? visibleCount + ' resultado' + (visibleCount !== 1 ? 's' : '')
           : '';
       }
 
-      input.addEventListener('input', function () { filter(input.value); });
-      clearBtn.addEventListener('click', function () { input.value = ''; input.focus(); filter(''); });
+      input.addEventListener('input', function () { filter(input.value, unitSelect.value); });
+      unitSelect.addEventListener('change', function () { filter(input.value, unitSelect.value); });
+      clearBtn.addEventListener('click', function () { input.value = ''; input.focus(); filter('', unitSelect.value); });
 
       // ---- Colapso de grupos ----
       document.querySelectorAll('.group-separator').forEach(function (sep) {
@@ -353,6 +386,16 @@ window.CotoSorter.vistaLigera = (function () {
       '      <input type="search" id="search-input" placeholder="Buscar producto\u2026" autocomplete="off" spellcheck="false">',
       '      <button class="search-clear" id="search-clear" title="Limpiar b\u00fasqueda">\u2715</button>',
       "    </div>",
+      '    <div class="unit-filter-wrap">',
+      '      <select id="unit-filter" class="unit-filter" title="Filtrar por tipo de unidad">',
+      '        <option value="">Todos los filtros</option>',
+      '        <option value="weight">$/Kg</option>',
+      '        <option value="volume">$/L</option>',
+      '        <option value="100g">$/100g</option>',
+      '        <option value="square">$/m²</option>',
+      '        <option value="unit">$/Unidad</option>',
+      '      </select>',
+      '    </div>',
       '    <span class="search-count" id="search-count"></span>',
       '    <span class="header-date">' + dateStr + "</span>",
       "  </header>",

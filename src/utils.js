@@ -65,7 +65,11 @@ window.CotoSorter.utils = (function () {
     if (f.startsWith("kilo") || f.startsWith("kg")) return "weight";
     if (f.startsWith("litro") || f.startsWith("lt")) return "volume";
     if (f.startsWith("100")) return "100g";
-    if (f.startsWith("metro")) return "square";
+    if (
+      f.startsWith("metro") ||
+      f.includes("cuadrad") ||
+      /m\s*(?:2|²)/i.test(f)
+    ) return "square";
     if (f.startsWith("unidad") || f.startsWith("uni")) return "unit";
     return null;
   }
@@ -102,7 +106,7 @@ window.CotoSorter.utils = (function () {
     if (/kilo/i.test(text)) return "weight";
     if (/litro/i.test(text)) return "volume";
     if (/100\s*gramo/i.test(text)) return "100g";
-    if (/cuadrado/i.test(text)) return "square";
+    if (/cuadrado|metro|m\s*(?:2|²)/i.test(text)) return "square";
     if (/unidad/i.test(text)) return "unit";
     return null;
   }
