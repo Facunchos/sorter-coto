@@ -21,8 +21,6 @@
 
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        debugLog("DOM mutation detected, processing new products...");
-
         const currentFilter = getCurrentFilter();
         if (currentFilter) {
           // Re-aplicar sort para integrar productos nuevos
@@ -32,7 +30,6 @@
             `.producto-card:not([${BADGE_ATTR}])`
           );
           if (unprocessed.length > 0) {
-            debugLog(`Found ${unprocessed.length} new products, injecting badges`);
             unprocessed.forEach(injectBadgeOnProduct);
           }
         }
@@ -65,7 +62,6 @@
     setTimeout(() => {
       const products = document.querySelectorAll(".producto-card");
       if (products.length > 0) {
-        debugLog(`Found ${products.length} products on page load`);
         injectAllBadges();
       } else {
         debugLog("No products found yet, observer will handle them");

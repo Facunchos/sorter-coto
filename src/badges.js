@@ -6,7 +6,6 @@ window.CotoSorter.badges = (function () {
 
   const { UNIT_PRICE_REGEX, UNIT_QTY_REGEX, BADGE_CLASS, BADGE_ATTR,
           parsePrice, formatPrice, normalizeUnitType, unitLabel } = window.CotoSorter.utils;
-  const { debugLog } = window.CotoSorter.logger;
 
   /** Extrae datos de precio unitario ajustado de un elemento producto del DOM. */
   function extractProductData(productEl) {
@@ -72,15 +71,6 @@ window.CotoSorter.badges = (function () {
     // Precio unitario ajustado
     const adjustedUnitPrice = listedUnitPrice * discountRatio;
 
-    const nameEl = productEl.querySelector("h3.nombre-producto");
-    const name = nameEl ? nameEl.textContent.trim() : "(unknown)";
-
-    debugLog(
-      `${name}: listed=$${listedUnitPrice.toFixed(2)}, ` +
-      `displayed=$${displayedPrice}, regular=$${regularPrice}, ` +
-      `ratio=${discountRatio.toFixed(4)}, adjusted=$${adjustedUnitPrice.toFixed(2)} /${unitLabel(type)}`
-    );
-
     return {
       unitType: type,
       unitRawLabel: rawUnitType,
@@ -89,7 +79,6 @@ window.CotoSorter.badges = (function () {
       displayedPrice,
       regularPrice,
       discountRatio,
-      name,
     };
   }
 
@@ -137,7 +126,6 @@ window.CotoSorter.badges = (function () {
   /** Inyecta badges en todos los wrappers de producto. */
   function injectAllBadges() {
     const wrappers = document.querySelectorAll(".producto-card");
-    debugLog(`Injecting badges on ${wrappers.length} products`);
     wrappers.forEach(injectBadgeOnProduct);
   }
 
