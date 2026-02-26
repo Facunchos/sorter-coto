@@ -645,6 +645,269 @@
   }
 
   /**
+   * Detects offer slug from URL, e.g. /productos/ofertas/3x2 -> "3x2".
+   */
+  function getOffersSlugFromLocation() {
+    const path = window.location.pathname || "";
+    const match = path.match(/\/productos\/ofertas\/([^/?#]+)/i);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  /**
+   * Finds best candidate offers API URL from resources already requested by the page.
+   * This is intentionally resilient against endpoint naming changes.
+   */
+  function findOffersApiTemplateFromPerformance() {
+    const slug = getOffersSlugFromLocation();
+    const entries = performance.getEntriesByType("resource") || [];
+    const candidates = [];
+
+    for (const entry of entries) {
+      const name = entry?.name || "";
+      if (!name.includes("/products/offers/")) continue;
+      if (!name.includes("api.coto.com.ar")) continue;
+      if (slug && !name.includes(`/products/offers/${slug}`)) continue;
+      candidates.push(name);
+    }
+
+    if (candidates.length === 0) {
+      debugLog("[TEMP][offers] No se encontraron candidatos en performance entries");
+      return null;
+    }
+
+    // Prefer most informative URL (with key + pre_filter_expression)
+    candidates.sort((a, b) => b.length - a.length);
+    const selected = candidates[0];
+    debugLog(`[TEMP][offers] Template detectado desde performance: ${selected}`);
+    return selected;
+  }
+
+  /**
+   * Tries to detect API key from scripts/HTML when performance entries are not available.
+   */
+  function findOffersApiKeyInPage() {
+    const regex = /key_[A-Za-z0-9]+/g;
+    const scripts = Array.from(document.querySelectorAll("script"));
+
+    for (const script of scripts) {
+      const txt = script.textContent || "";
+      const m = txt.match(regex);
+      if (m && m[0]) {
+        debugLog(`[TEMP][offers] API key detectada en script: ${m[0].slice(0, 12)}...`);
+        return m[0];
+      }
+    }
+
+    const html = document.documentElement?.innerHTML || "";
+    const m = html.match(regex);
+    if (m && m[0]) {
+      debugLog(`[TEMP][offers] API key detectada en HTML: ${m[0].slice(0, 12)}...`);
+      return m[0];
+    }
+
+    debugLog("[TEMP][offers] No se pudo detectar API key en el DOM");
+    return null;
+  }
+
+  /**
+   * Tries to detect store id used in pre_filter_expression.
+   */
+  function findStoreAvailabilityValueInPage() {
+    const patterns = [
+      /"pre_filter_expression"\s*:\s*\{\s*"name"\s*:\s*"store_availability"\s*,\s*"value"\s*:\s*"(\d{2,4})"/i,
+      /store_availability%22\s*:\s*%22(\d{2,4})/i,
+      /"store_availability"\s*,\s*"value"\s*:\s*"(\d{2,4})"/i,
+    ];
+
+    const scripts = Array.from(document.querySelectorAll("script"));
+    for (const script of scripts) {
+      const txt = script.textContent || "";
+      for (const pattern of patterns) {
+        const m = txt.match(pattern);
+        if (m?.[1]) {
+          debugLog(`[TEMP][offers] Store detectada en script: ${m[1]}`);
+          return m[1];
+        }
+      }
+    }
+
+    const html = document.documentElement?.innerHTML || "";
+    for (const pattern of patterns) {
+      const m = html.match(pattern);
+      if (m?.[1]) {
+        debugLog(`[TEMP][offers] Store detectada en HTML: ${m[1]}`);
+        return m[1];
+      }
+    }
+
+    debugLog("[TEMP][offers] No se pudo detectar store_availability en el DOM");
+    return null;
+  }
+
+  /**
+   * Builds Offers API URL (new backend) from either a detected template or scratch.
+   */
+  function buildOffersApiUrl(page, numResultsPerPage, templateUrl = null) {
+    let url;
+
+    if (templateUrl) {
+      url = new URL(templateUrl);
+    } else {
+      const slug = getOffersSlugFromLocation();
+      const key = findOffersApiKeyInPage();
+      if (!slug || !key) {
+        throw new Error("No se pudo construir URL de la API de ofertas (faltan slug o key)");
+      }
+
+      url = new URL(`https://api.coto.com.ar/api/v1/ms-digital-sitio-bff-web/api/v1/products/offers/${slug}`);
+      url.searchParams.set("key", key);
+
+      const storeValue = findStoreAvailabilityValueInPage();
+      if (storeValue) {
+        url.searchParams.set(
+          "pre_filter_expression",
+          JSON.stringify({ name: "store_availability", value: storeValue })
+        );
+      }
+    }
+
+    url.searchParams.set("num_results_per_page", String(numResultsPerPage));
+    url.searchParams.set("page", String(page));
+    return url.toString();
+  }
+
+  /**
+   * Parses one product from new offers API format.
+   */
+  function parseOffersResult(result) {
+    const data = result?.data || {};
+    const name = data.sku_display_name || data.sku_description || result?.value || "Producto";
+    const imgSrc = data.product_large_image_url || data.product_medium_image_url || data.image_url || null;
+    const listPrice = Number(data.product_list_price || 0);
+    const cFormato = data.product_format || "";
+    const unitType = cFormatoToUnitType(cFormato);
+
+    let href = null;
+    if (data.url) {
+      const clean = String(data.url).replace(/^\/+/, "");
+      href = `https://www.cotodigital.com.ar/sitios/cdigi/productos/${clean}`;
+    }
+
+    const badges = [];
+    for (const offer of data.sale_type || []) {
+      const txt = String(offer || "").trim();
+      if (txt && txt !== "Todas las Ofertas" && !badges.includes(txt)) badges.push(txt);
+    }
+
+    for (const dto of data.discounts || []) {
+      const taking = String(dto?.takingText || "").trim();
+      const discount = String(dto?.discountText || "").trim();
+      if (taking && !badges.includes(taking)) badges.push(taking);
+      if (discount && !badges.includes(discount)) badges.push(discount);
+    }
+
+    const priceText = listPrice > 0 ? formatApiPrice(listPrice) : null;
+    const offerLabel = badges[0] || null;
+
+    debugLog(`[TEMP][offers] Parsed: ${name} | price=${priceText} | unitType=${unitType} | badges=${badges.join(",")}`);
+
+    return {
+      name,
+      href,
+      imgSrc,
+      priceText,
+      regularPrice: listPrice > 0 ? String(listPrice) : "",
+      badges,
+      unitPriceText: null,
+      offerLabel,
+      unitType,
+      activePrice: listPrice,
+      unitPrice: null,
+    };
+  }
+
+  /**
+   * Checks if payload is the new offers API response shape.
+   */
+  function isOffersApiResponse(payload) {
+    return Array.isArray(payload?.response?.results);
+  }
+
+  /**
+   * Scrapes all products using new offers API.
+   */
+  async function scrapeAllPagesFromOffersApi(progressCallback) {
+    const BATCH = 50;
+    const PARALLEL = 3;
+
+    const templateUrl = findOffersApiTemplateFromPerformance();
+    const firstUrl = buildOffersApiUrl(1, BATCH, templateUrl);
+    debugLog(`[TEMP][offers] Fetching first page: ${firstUrl}`);
+
+    const firstResp = await fetch(firstUrl, { credentials: "same-origin" });
+    if (!firstResp.ok) throw new Error(`Offers API error ${firstResp.status}`);
+    const firstData = await firstResp.json();
+
+    if (!isOffersApiResponse(firstData)) {
+      throw new Error("La API de ofertas no devolvió el formato esperado (response.results)");
+    }
+
+    const total = Number(firstData?.response?.total_num_results || 0);
+    const firstResults = firstData?.response?.results || [];
+    const allProducts = [];
+
+    if (progressCallback) progressCallback(0, total);
+    for (const result of firstResults) {
+      try {
+        allProducts.push(parseOffersResult(result));
+      } catch (e) {
+        debugLog("[TEMP][offers] Error parsing result:", e);
+      }
+    }
+
+    if (progressCallback) progressCallback(allProducts.length, total);
+    debugLog(`[TEMP][offers] First page parsed: ${allProducts.length}/${total}`);
+
+    const totalPages = Math.max(1, Math.ceil(total / BATCH));
+    const remainingPages = [];
+    for (let page = 2; page <= totalPages; page++) {
+      remainingPages.push(page);
+    }
+
+    for (let i = 0; i < remainingPages.length; i += PARALLEL) {
+      const group = remainingPages.slice(i, i + PARALLEL);
+      const batches = await Promise.all(
+        group.map(async (page) => {
+          const url = buildOffersApiUrl(page, BATCH, templateUrl);
+          debugLog(`[TEMP][offers] Fetching page ${page}: ${url}`);
+          const resp = await fetch(url, { credentials: "same-origin" });
+          if (!resp.ok) throw new Error(`Offers API error ${resp.status} at page ${page}`);
+          const data = await resp.json();
+          const products = [];
+          for (const result of data?.response?.results || []) {
+            try {
+              products.push(parseOffersResult(result));
+            } catch (e) {
+              debugLog("[TEMP][offers] Error parsing result:", e);
+            }
+          }
+          return products;
+        })
+      );
+
+      for (const batch of batches) {
+        allProducts.push(...batch);
+      }
+
+      if (progressCallback) progressCallback(allProducts.length, total);
+      debugLog(`[TEMP][offers] Progress: ${allProducts.length}/${total}`);
+    }
+
+    debugLog(`[TEMP][offers] Scraping complete: ${allProducts.length} total products`);
+    return allProducts;
+  }
+
+  /**
    * Navigates the Endeca JSON response to find the Category_ResultsList node.
    * Returns null if not found.
    */
@@ -793,7 +1056,8 @@
 
     const resultsList = findResultsList(firstData);
     if (!resultsList) {
-      throw new Error("No se encontró Category_ResultsList en la respuesta de la API. ¿Estás en una página de categoría o búsqueda de COTO?");
+      debugLog("[TEMP] No se encontró Category_ResultsList en API legacy. Intentando fallback Offers API...");
+      return scrapeAllPagesFromOffersApi(progressCallback);
     }
 
     const totalNumRecs = resultsList.totalNumRecs || 0;
