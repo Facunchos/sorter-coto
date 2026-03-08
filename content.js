@@ -27,7 +27,7 @@
           sortProducts(currentFilter);
         } else {
           const unprocessed = document.querySelectorAll(
-            `.producto-card:not([${BADGE_ATTR}])`
+            `.producto-card:not([${BADGE_ATTR}="done"])`
           );
           if (unprocessed.length > 0) {
             unprocessed.forEach(injectBadgeOnProduct);

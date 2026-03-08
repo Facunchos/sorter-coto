@@ -38,15 +38,8 @@ window.CotoSorter.badges = (function () {
     const h4 = productEl.querySelector("h4.card-title");
     const displayedPrice = h4 ? parsePrice(h4.textContent) : NaN;
 
-    // Precio regular — fuente primaria: data-cnstrc-item-price
-    const cardContainer = productEl.querySelector("[data-cnstrc-item-price]");
+    // Precio regular — fuente primaria: texto "Precio Regular".
     let regularPrice = NaN;
-
-    if (cardContainer) {
-      regularPrice = parseFloat(cardContainer.getAttribute("data-cnstrc-item-price"));
-    }
-
-    // Fallback: parsear "Precio Regular: $X" del texto
     if (isNaN(regularPrice) || regularPrice <= 0) {
       for (const small of smalls) {
         const text = small.textContent || "";
@@ -55,6 +48,14 @@ window.CotoSorter.badges = (function () {
           regularPrice = parsePrice(regMatch[1]);
           break;
         }
+      }
+    }
+
+    // Fallback: data-cnstrc-item-price (a veces trae precio actual/promo).
+    if (isNaN(regularPrice) || regularPrice <= 0) {
+      const cardContainer = productEl.querySelector("[data-cnstrc-item-price]");
+      if (cardContainer) {
+        regularPrice = parseFloat(cardContainer.getAttribute("data-cnstrc-item-price"));
       }
     }
 

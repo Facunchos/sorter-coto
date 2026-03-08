@@ -4,6 +4,178 @@ window.CotoSorter = window.CotoSorter || {};
 window.CotoSorter.vistaLigera = (function () {
   "use strict";
 
+  const { formatPrice, unitLabel } = window.CotoSorter.utils;
+
+  function parseMoneyLoose(value) {
+    if (value == null) return NaN;
+
+    const raw = String(value).trim().replace(/\$/g, "").replace(/\s+/g, "");
+    if (!raw) return NaN;
+
+    const normalized = raw.replace(/[^\d,.-]/g, "");
+    if (!normalized) return NaN;
+
+    const hasComma = normalized.includes(",");
+    const hasDot = normalized.includes(".");
+
+    if (hasComma && hasDot) {
+      return parseFloat(normalized.replace(/\./g, "").replace(/,/g, "."));
+    }
+
+    if (hasComma) {
+      return parseFloat(normalized.replace(/,/g, "."));
+    }
+
+    if (hasDot) {
+      const dotCount = (normalized.match(/\./g) || []).length;
+      if (dotCount > 1) {
+        const lastDot = normalized.lastIndexOf(".");
+        const compact = normalized.slice(0, lastDot).replace(/\./g, "") + normalized.slice(lastDot);
+        return parseFloat(compact);
+      }
+
+      const parts = normalized.split(".");
+      if (parts.length === 2 && parts[1].length === 3) {
+        return parseFloat(parts[0] + parts[1]);
+      }
+
+      return parseFloat(normalized);
+    }
+
+    return parseFloat(normalized);
+  }
+
+  function parseUnitPrice(unitPriceText) {
+    const raw = String(unitPriceText || "");
+    const match = raw.match(/^\s*\$\/([^:]+):\s*\$?(.+)$/i);
+    if (!match) return { label: null, value: NaN };
+    return {
+      label: String(match[1] || "").trim(),
+      value: parseMoneyLoose(match[2]),
+    };
+  }
+
+  function collectPromoText(product) {
+    return [
+      ...(Array.isArray(product?.promoTags) ? product.promoTags : []),
+      ...(Array.isArray(product?.badges) ? product.badges : []),
+    ]
+      .map((x) => String(x || "").toLowerCase())
+      .join(" ");
+  }
+
+  function pickPromoLabel(product) {
+    const tokens = [
+      ...(Array.isArray(product?.promoTags) ? product.promoTags : []),
+      ...(Array.isArray(product?.badges) ? product.badges : []),
+    ]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean);
+
+    if (tokens.length === 0) return null;
+
+    const filtered = tokens.filter((t) => !/^(todas\s+las\s+ofertas|llevando\s+\d+)/i.test(t));
+    const candidates = filtered.length ? filtered : tokens;
+
+    const direct = candidates.find((t) => /(\d+\s*x\s*\d+)|(segunda|2da)\s+unidad|\d+\s*%/i.test(t));
+    return direct || candidates[0] || null;
+  }
+
+  /**
+   * Intenta inferir ratio efectivo de promo cuando no hay precio promocional explícito.
+   * Ejemplos:
+   * - "2x1" => 0.5
+   * - "3x2" => 0.666...
+   * - "segunda unidad al 70% dto" => (1 + 0.30) / 2 = 0.65
+   * - "segunda unidad al 70%" => (1 + 0.70) / 2 = 0.85
+   */
+  function inferPromoRatio(product) {
+    const text = collectPromoText(product);
+    if (!text) return null;
+
+    // Prioridad 1: promos tipo NxM (2x1, 3x2, 4x3...).
+    const nxmRegex = /(\d+)\s*x\s*(\d+)/g;
+    let nxmMatch;
+    while ((nxmMatch = nxmRegex.exec(text)) !== null) {
+      const units = parseInt(nxmMatch[1], 10);
+      const pay = parseInt(nxmMatch[2], 10);
+      if (Number.isFinite(units) && Number.isFinite(pay) && units > 0 && pay > 0 && pay < units) {
+        return pay / units;
+      }
+    }
+
+    // Prioridad 2: "segunda unidad al X%".
+    // Si se menciona dto/descuento/off, tomamos X como descuento de la 2da unidad.
+    const secondUnit = text.match(/(?:segunda|2da)\s+unidad[^\d]*(\d{1,3})\s*%/i);
+    if (secondUnit) {
+      const pct = parseFloat(secondUnit[1]);
+      if (Number.isFinite(pct) && pct > 0 && pct < 100) {
+        const hasDiscountWord = /\b(dto|descuento|off)\b/i.test(text);
+        const secondUnitRatio = hasDiscountWord ? (1 - pct / 100) : (pct / 100);
+        const effective = (1 + secondUnitRatio) / 2;
+        if (effective > 0 && effective < 1) return effective;
+      }
+    }
+
+    return null;
+  }
+
+  /** Resuelve precios a mostrar para evitar inconsistencias entre promo y $/X. */
+  function resolveDisplayPrices(p) {
+    const regularPrice = parseMoneyLoose(p?.priceText);
+    const promoFromRaw = parseMoneyLoose(p?.promoPriceRaw);
+    const promoFromDiscountedText = parseMoneyLoose(p?.discountedPriceText);
+    const unitParsed = parseUnitPrice(p?.unitPriceText);
+
+    let promoPrice = NaN;
+    const promoCandidates = [promoFromRaw, promoFromDiscountedText];
+    for (const candidate of promoCandidates) {
+      if (!Number.isFinite(candidate) || candidate <= 0) continue;
+      if (Number.isFinite(regularPrice) && regularPrice > 0 && candidate < regularPrice) {
+        promoPrice = candidate;
+        break;
+      }
+      if (!Number.isFinite(promoPrice)) promoPrice = candidate;
+    }
+
+    if (!Number.isFinite(promoPrice) && Number.isFinite(regularPrice) && regularPrice > 0) {
+      const inferredRatio = inferPromoRatio(p);
+      if (Number.isFinite(inferredRatio) && inferredRatio > 0 && inferredRatio < 1) {
+        promoPrice = regularPrice * inferredRatio;
+      }
+    }
+
+    const hasDiscount =
+      Number.isFinite(regularPrice) && regularPrice > 0 &&
+      Number.isFinite(promoPrice) && promoPrice > 0 && promoPrice < regularPrice;
+
+    const unitBaseCandidates = [
+      Number(p?.maxFormatPriceRaw),
+      Number(p?.referencePrice),
+      unitParsed.value,
+    ].filter((n) => Number.isFinite(n) && n > 0);
+
+    const unitBase = unitBaseCandidates.length ? Math.max(...unitBaseCandidates) : NaN;
+
+    // Regla pedida: (precioDescuento * precioPorXRegular) / precioRegular
+    const unitPriceResolved = hasDiscount && Number.isFinite(unitBase)
+      ? ((promoPrice * unitBase) / regularPrice)
+      : (Number.isFinite(unitBase) ? unitBase : NaN);
+
+    const regularPriceText = Number.isFinite(regularPrice) ? formatPrice(regularPrice) : (p?.priceText || "");
+    const promoPriceText = hasDiscount ? formatPrice(promoPrice) : null;
+    const unitPriceText = Number.isFinite(unitPriceResolved) && unitPriceResolved > 0
+      ? `$/` + (unitParsed.label || unitLabel(p?.unitType) || "u") + `: ${formatPrice(unitPriceResolved)}`
+      : "";
+
+    return {
+      hasDiscount,
+      regularPriceText,
+      promoPriceText,
+      unitPriceText,
+    };
+  }
+
   // ---- Helpers de construcción HTML ----
 
   function buildCardHTML(p, groupUnitType) {
@@ -15,17 +187,20 @@ window.CotoSorter.vistaLigera = (function () {
       ? `<img src="${p.imgSrc}" alt="" loading="lazy" onerror="this.style.display='none'">`
       : `<div class="no-img"></div>`;
 
-    const priceClass = p.discountedPriceText ? "price-regular striked" : "price-regular";
-    const discountRow = p.discountedPriceText
-      ? `<div class="price-discount">${p.discountedPriceText}</div>`
+    const resolved = resolveDisplayPrices(p);
+
+    const priceClass = resolved.hasDiscount ? "price-regular striked" : "price-regular";
+    const discountRow = resolved.hasDiscount
+      ? `<div class="price-discount">${resolved.promoPriceText}</div>`
       : "";
 
-    const badgesHTML = p.badges && p.badges.length > 0
-      ? `<div class="badges">${p.badges.map((b) => `<span class="badge">${b}</span>`).join("")}</div>`
+    const promoLabel = pickPromoLabel(p);
+    const badgesHTML = promoLabel
+      ? `<div class="badges"><span class="badge">${promoLabel}</span></div>`
       : "";
 
-    const unitPriceHTML = p.unitPriceText
-      ? `<div class="unit-price">${p.unitPriceText}</div>`
+    const unitPriceHTML = resolved.unitPriceText
+      ? `<div class="unit-price">${resolved.unitPriceText}</div>`
       : "";
 
     const tag = p.href ? "a" : "div";
@@ -41,7 +216,7 @@ window.CotoSorter.vistaLigera = (function () {
     <div class="card-img">${imgTag}</div>
     <div class="card-info">
       <div class="card-name">${p.name || "Producto"}</div>
-      <div class="${priceClass}">${p.priceText || ""}</div>
+      <div class="${priceClass}">${resolved.regularPriceText}</div>
       ${discountRow}
       ${badgesHTML}
       ${unitPriceHTML}

@@ -245,6 +245,49 @@ window.CotoSorter.api = (function () {
     return raw * 1.21;
   }
 
+  /** Parsea strings monetarios con formato ES/US a número. */
+  function parseMoneyLoose(value) {
+    if (value == null) return NaN;
+
+    const raw = String(value).trim().replace(/\$/g, "").replace(/\s+/g, "");
+    if (!raw) return NaN;
+
+    const normalized = raw.replace(/[^\d,.-]/g, "");
+    if (!normalized) return NaN;
+
+    const hasComma = normalized.includes(",");
+    const hasDot = normalized.includes(".");
+
+    // 1.234,56
+    if (hasComma && hasDot) {
+      return parseFloat(normalized.replace(/\./g, "").replace(/,/g, "."));
+    }
+
+    // 1234,56
+    if (hasComma) {
+      return parseFloat(normalized.replace(/,/g, "."));
+    }
+
+    // 1234.56 o 1.234
+    if (hasDot) {
+      const dotCount = (normalized.match(/\./g) || []).length;
+      if (dotCount > 1) {
+        const lastDot = normalized.lastIndexOf(".");
+        const compact = normalized.slice(0, lastDot).replace(/\./g, "") + normalized.slice(lastDot);
+        return parseFloat(compact);
+      }
+
+      const parts = normalized.split(".");
+      if (parts.length === 2 && parts[1].length === 3) {
+        return parseFloat(parts[0] + parts[1]);
+      }
+
+      return parseFloat(normalized);
+    }
+
+    return parseFloat(normalized);
+  }
+
   /** Extrae badges legibles de sale_type y discounts. */
   function parseBffBadges(data) {
     const badges = [];
@@ -258,7 +301,14 @@ window.CotoSorter.api = (function () {
 
     const discounts = Array.isArray(data?.discounts) ? data.discounts : [];
     for (const dto of discounts) {
-      const candidates = [dto?.textoLlevando, dto?.textoDescuento, dto?.name, dto?.label];
+      const candidates = [
+        dto?.textoLlevando,
+        dto?.textoDescuento,
+        dto?.takingText,
+        dto?.discountText,
+        dto?.name,
+        dto?.label,
+      ];
       for (const c of candidates) {
         const text = String(c || "").trim();
         if (text && !badges.includes(text)) badges.push(text);
@@ -286,6 +336,8 @@ window.CotoSorter.api = (function () {
 
     const listPrice = numOrZero(data.product_list_price);
     const priceEntries = Array.isArray(data.price) ? data.price : [];
+    const discounts = Array.isArray(data?.discounts) ? data.discounts : [];
+
     const priceCandidates = priceEntries
       .map((p) => fromWithoutTax(p?.priceWithoutTax))
       .filter((n) => n > 0);
@@ -294,27 +346,95 @@ window.CotoSorter.api = (function () {
     const minPrice = priceCandidates.length ? Math.min(...priceCandidates) : 0;
 
     const activePrice = listPrice || maxPrice || minPrice || 0;
-    const referencePrice = activePrice;
+    const formatCandidates = priceEntries
+      .map((entry) => numOrZero(entry?.formatPrice))
+      .filter((n) => n > 0);
+    const maxFormatPrice = formatCandidates.length ? Math.max(...formatCandidates) : 0;
+
+    // Base de precio por X (regular) tomada desde formatPrice del registro de precio.
+    // Priorizamos la entrada cuyo listPrice coincida mejor con product_list_price.
+    let referencePrice = 0;
+    if (priceEntries.length > 0) {
+      let bestEntry = null;
+      let bestDiff = Infinity;
+
+      for (const entry of priceEntries) {
+        const candidateFormat = numOrZero(entry?.formatPrice);
+        if (!candidateFormat) continue;
+
+        const candidateList = numOrZero(entry?.listPrice);
+        const diff = activePrice > 0 ? Math.abs(candidateList - activePrice) : 0;
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestEntry = entry;
+        }
+      }
+
+      if (bestEntry) {
+        referencePrice = numOrZero(bestEntry.formatPrice);
+      }
+
+      if (!referencePrice) {
+        for (const entry of priceEntries) {
+          const candidateFormat = numOrZero(entry?.formatPrice);
+          if (candidateFormat > 0) {
+            referencePrice = candidateFormat;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!referencePrice) {
+      referencePrice = activePrice;
+    }
+
+    // Defensa ante outliers: si el candidato elegido es demasiado bajo respecto
+    // al mejor formatPrice disponible, preferimos el valor robusto para $/X.
+    if (maxFormatPrice > 0 && referencePrice > 0 && referencePrice < (maxFormatPrice * 0.25)) {
+      referencePrice = maxFormatPrice;
+    }
 
     let discountRatio = 1;
-    if (minPrice > 0 && activePrice > 0 && minPrice < activePrice) {
+    let promoPrice = 0;
+
+    for (const dto of discounts) {
+      const parsed = parseMoneyLoose(dto?.discountPrice ?? dto?.precioDescuento);
+      if (Number.isFinite(parsed) && parsed > 0 && (!promoPrice || parsed < promoPrice)) {
+        promoPrice = parsed;
+      }
+    }
+
+    if (promoPrice > 0 && activePrice > 0 && promoPrice < activePrice) {
+      discountRatio = promoPrice / activePrice;
+    } else if (minPrice > 0 && activePrice > 0 && minPrice < activePrice) {
       discountRatio = minPrice / activePrice;
     }
 
     const hasDiscount = discountRatio < 0.999;
     const adjustedReferencePrice = hasDiscount ? referencePrice * discountRatio : referencePrice;
-    const discountedPriceText = hasDiscount ? formatApiPrice(activePrice * discountRatio) : null;
+    const effectiveDiscountedPrice = hasDiscount
+      ? (promoPrice > 0 ? promoPrice : activePrice * discountRatio)
+      : 0;
+    const discountedPriceText = hasDiscount ? formatApiPrice(effectiveDiscountedPrice) : null;
 
     const priceText = formatApiPrice(activePrice);
 
     let unitPriceText = null;
     if (referencePrice > 0 && unitType) {
       const shortLabel = unitLabel(unitType);
-      const priceToShow = hasDiscount ? adjustedReferencePrice : referencePrice;
-      unitPriceText = `$/${shortLabel}: ${formatApiPrice(priceToShow)}`;
+      unitPriceText = `$/${shortLabel}: ${formatApiPrice(referencePrice)}`;
     }
 
     const badges = parseBffBadges(data);
+    const promoTags = [
+      ...(Array.isArray(data?.sale_type) ? data.sale_type : []),
+      ...discounts.map((d) => d?.discountText),
+      ...discounts.map((d) => d?.takingText),
+      ...badges,
+    ]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean);
 
 
     return {
@@ -330,6 +450,9 @@ window.CotoSorter.api = (function () {
       referencePrice,
       adjustedReferencePrice,
       discountRatio,
+      promoPriceRaw: promoPrice > 0 ? promoPrice : null,
+      maxFormatPriceRaw: maxFormatPrice > 0 ? maxFormatPrice : null,
+      promoTags,
     };
   }
 
@@ -357,8 +480,7 @@ window.CotoSorter.api = (function () {
     if (dtoArr.length > 0 && activePrice > 0) {
       let bestEffectivePrice = Infinity;
       for (const dto of dtoArr) {
-        const match = (dto.precioDescuento || "").match(/[\d]+(?:\.\d+)?/);
-        const pd = match ? parseFloat(match[0]) : NaN;
+        const pd = parseMoneyLoose(dto?.precioDescuento);
         if (!isNaN(pd) && pd > 0 && pd < bestEffectivePrice) {
           bestEffectivePrice = pd;
         }
@@ -415,21 +537,29 @@ window.CotoSorter.api = (function () {
       ? referencePrice * discountRatio
       : referencePrice;
 
-    // Texto de precio unitario
+    // Texto de precio unitario regular (sin descuento aplicado).
     let unitPriceText = null;
     if (referencePrice > 0 && unitType) {
       const shortLabel = unitLabel(unitType);
-      const priceToShow = hasDiscount ? adjustedReferencePrice : referencePrice;
-      unitPriceText = `$/${shortLabel}: ${formatApiPrice(priceToShow)}`;
+      unitPriceText = `$/${shortLabel}: ${formatApiPrice(referencePrice)}`;
     }
 
     const discountedPriceText = hasDiscount ? formatApiPrice(activePrice * discountRatio) : null;
     const badges = parseBadges(dtoArr);
+    const promoPriceRaw = hasDiscount ? activePrice * discountRatio : null;
+    const promoTags = [
+      ...badges,
+      ...dtoArr.map((dto) => dto?.textoDescuento),
+      ...dtoArr.map((dto) => dto?.textoLlevando),
+    ]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean);
 
 
     return {
       name, href, imgSrc, priceText, discountedPriceText, badges, unitPriceText, unitType,
       activePrice, referencePrice, adjustedReferencePrice, discountRatio,
+      promoPriceRaw, promoTags,
     };
   }
 
