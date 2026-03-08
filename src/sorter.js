@@ -40,7 +40,7 @@ window.CotoSorter.sorter = (function () {
     }
 
     const items = wrappers.map((wrapper) => {
-      const productEl = wrapper.querySelector("catalogue-product");
+      const productEl = wrapper.querySelector("catalogue-product, constructor-result-item, .card-container");
       const data = productEl ? extractProductData(productEl) : null;
       return { wrapper, data };
     });

@@ -34,9 +34,16 @@ window.CotoSorter.badges = (function () {
     const listedUnitPrice = parsePrice(rawUnitPrice);
     if (isNaN(listedUnitPrice) || listedUnitPrice <= 0) return null;
 
-    // Precio mostrado (lo que pagás)
+    // Precio mostrado (lo que pagas)
     const h4 = productEl.querySelector("h4.card-title");
-    const displayedPrice = h4 ? parsePrice(h4.textContent) : NaN;
+    const displayedFromH4 = h4 ? parsePrice(h4.textContent) : NaN;
+
+    const cardContainer = productEl.matches?.("[data-cnstrc-item-price]")
+      ? productEl
+      : productEl.querySelector("[data-cnstrc-item-price]");
+    const displayedFromAttr = cardContainer
+      ? parseFloat(cardContainer.getAttribute("data-cnstrc-item-price"))
+      : NaN;
 
     // Precio regular — fuente primaria: texto "Precio Regular".
     let regularPrice = NaN;
@@ -53,9 +60,20 @@ window.CotoSorter.badges = (function () {
 
     // Fallback: data-cnstrc-item-price (a veces trae precio actual/promo).
     if (isNaN(regularPrice) || regularPrice <= 0) {
-      const cardContainer = productEl.querySelector("[data-cnstrc-item-price]");
       if (cardContainer) {
         regularPrice = parseFloat(cardContainer.getAttribute("data-cnstrc-item-price"));
+      }
+    }
+
+    let displayedPrice = NaN;
+    const displayedCandidates = [displayedFromH4, displayedFromAttr]
+      .filter((n) => Number.isFinite(n) && n > 0);
+
+    if (displayedCandidates.length > 0) {
+      displayedPrice = displayedCandidates[0];
+      if (Number.isFinite(regularPrice) && regularPrice > 0) {
+        const underRegular = displayedCandidates.find((n) => n < regularPrice);
+        if (Number.isFinite(underRegular)) displayedPrice = underRegular;
       }
     }
 
@@ -63,14 +81,18 @@ window.CotoSorter.badges = (function () {
       regularPrice = displayedPrice;
     }
 
-    // Ratio de descuento
-    let discountRatio = 1;
-    if (!isNaN(displayedPrice) && displayedPrice > 0 && regularPrice > 0) {
-      discountRatio = displayedPrice / regularPrice;
-    }
+    const hasDiscount =
+      Number.isFinite(displayedPrice) && displayedPrice > 0 &&
+      Number.isFinite(regularPrice) && regularPrice > 0 &&
+      displayedPrice < regularPrice;
 
-    // Precio unitario ajustado
-    const adjustedUnitPrice = listedUnitPrice * discountRatio;
+    // Misma regla de tres que Vista Ligera:
+    // (precioDescuento * precioPorXRegular) / precioRegular
+    const adjustedUnitPrice = hasDiscount
+      ? ((displayedPrice * listedUnitPrice) / regularPrice)
+      : listedUnitPrice;
+
+    const discountRatio = hasDiscount ? (displayedPrice / regularPrice) : 1;
 
     return {
       unitType: type,
@@ -87,7 +109,7 @@ window.CotoSorter.badges = (function () {
 
   /** Inyecta o actualiza el badge de precio en un card wrapper. */
   function injectBadgeOnProduct(wrapper) {
-    const productEl = wrapper.querySelector("catalogue-product");
+    const productEl = wrapper.querySelector("catalogue-product, constructor-result-item, .card-container");
     if (!productEl) return;
 
     const data = extractProductData(productEl);
