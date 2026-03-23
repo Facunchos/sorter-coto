@@ -41,7 +41,9 @@
 - MUST keep brand and oferta filters as multi-select include lists (checked values are visible values).
 - MUST keep default brand/oferta state with no checks as "show all" (opt-in narrowing).
 - MUST keep Marcas menu searchable by text for large brand sets.
-- MUST highlight in green the Marcas entries currently visible on screen when at least one Ofertas option is active.
+- MUST make Marcas options depend only on active Ofertas selection: when Ofertas is active, show only brands present in those oferta-matching products.
+- MUST show those oferta-available Marcas options in green while Ofertas is active.
+- MUST clear checked Marcas values that are no longer available after changing Ofertas.
 - Fallback behavior: if no valid discount inputs, show regular price path only.
 
 ## Failure Modes

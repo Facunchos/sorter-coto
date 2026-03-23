@@ -3,7 +3,6 @@
 ## Purpose
 - Provide floating control panel for sorting, generation, reset, and support contact.
 - Surface progress state for long-running generation flows.
-- Provide quick search shortcuts (example: `Leche 1 litro`) from the `Generar` menu.
 
 ## Entry Points
 - Trigger: `injectUI()` during startup.
@@ -26,11 +25,10 @@
 1. Build floating panel (header, buttons, dropdowns, progress area, actions).
 2. Top-level `Vista Ligera` button triggers HTML generation flow.
 3. Sort dropdown maps each filter to `sortProducts` callback.
-4. Generate dropdown routes to printable flow and quick search actions.
-5. Quick action `Leche` triggers site search with term `Leche 1 litro`.
-6. For repeated Vista Ligera use, persist pending count and reload page.
-7. On next load, consume pending flag and auto-run Vista Ligera.
-8. Reset action restores original product order.
+4. Generate dropdown routes to printable generation flow.
+5. For repeated Vista Ligera use, persist pending count and reload page.
+6. On next load, consume pending flag and auto-run Vista Ligera.
+7. Reset action restores original product order.
 
 ## Invariants
 - MUST keep `FILTER_TYPES` keys aligned with sorter logic.

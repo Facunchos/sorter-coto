@@ -275,17 +275,6 @@ window.CotoSorter.ui = (function () {
     });
     dropdown.appendChild(itemRevista);
 
-    // Búsqueda rápida de ejemplo
-    const itemLeche = document.createElement("button");
-    itemLeche.className = "coto-sorter-dropdown-item";
-    itemLeche.textContent = "🥛 Leche";
-    itemLeche.title = 'Busca "Leche 1 litro" en COTO';
-    itemLeche.addEventListener("click", () => {
-      dropdown.classList.remove("coto-sorter-dropdown-open");
-      triggerSiteSearch("Leche 1 litro");
-    });
-    dropdown.appendChild(itemLeche);
-
     // Indicador de progreso
     const progressEl = document.createElement("div");
     progressEl.className = "coto-sorter-progress";

@@ -463,24 +463,76 @@ window.CotoSorter.vistaLigera = (function () {
         return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       }
 
-      function filterBrandOptions(queryText) {
+      function filterBrandOptions(queryText, allowedBrands, onlyAllowedBrands) {
         if (!brandOptions) return;
         var term = normalizeForSearch(queryText).trim();
+        var allowed = allowedBrands instanceof Set ? allowedBrands : null;
+        var onlyAllowed = !!onlyAllowedBrands;
+
         Array.from(brandOptions.querySelectorAll('.multi-option')).forEach(function (option) {
           var input = option.querySelector('input[type="checkbox"]');
+          var valueRaw = input ? String(input.value || '').toLowerCase() : '';
           var value = input ? normalizeForSearch(input.value) : '';
-          var match = !term || value.includes(term);
-          option.classList.toggle('hidden-option', !match);
+          var matchSearch = !term || value.includes(term);
+          var matchAllowed = !onlyAllowed || (allowed && allowed.has(valueRaw));
+          option.classList.toggle('hidden-option', !(matchSearch && matchAllowed));
         });
       }
 
-      function updateAvailableBrandHighlight(isOfertaFilterActive, visibleBrandSet) {
+      function updateAvailableBrandHighlight(isOfertaFilterActive, allowedBrandSet) {
         if (!brandOptions) return;
-        Array.from(brandOptions.querySelectorAll('.multi-option')).forEach(function (option) {
+
+        var options = Array.from(brandOptions.querySelectorAll('.multi-option'));
+        options.forEach(function (option) {
           var input = option.querySelector('input[type="checkbox"]');
           var value = input ? String(input.value || '').toLowerCase() : '';
-          var isVisibleBrand = isOfertaFilterActive && visibleBrandSet.has(value);
+          var isVisibleBrand = isOfertaFilterActive && allowedBrandSet.has(value);
+
           option.classList.toggle('available-brand', isVisibleBrand);
+        });
+
+        options.sort(function (a, b) {
+          var aInput = a.querySelector('input[type="checkbox"]');
+          var bInput = b.querySelector('input[type="checkbox"]');
+          var aValue = aInput ? String(aInput.value || '') : '';
+          var bValue = bInput ? String(bInput.value || '') : '';
+
+          if (isOfertaFilterActive) {
+            var aTop = a.classList.contains('available-brand') ? 0 : 1;
+            var bTop = b.classList.contains('available-brand') ? 0 : 1;
+            if (aTop !== bTop) return aTop - bTop;
+          }
+
+          return aValue.localeCompare(bValue, 'es', { sensitivity: 'base' });
+        });
+
+        options.forEach(function (option) {
+          brandOptions.appendChild(option);
+        });
+      }
+
+      function getAllowedBrandsFromPromos(selectedPromos) {
+        if (!(selectedPromos instanceof Set) || selectedPromos.size === 0) return null;
+        var allowed = new Set();
+
+        cards.forEach(function (card) {
+          var promo = (card.dataset.promo || '').toLowerCase();
+          var brand = (card.dataset.brand || '').toLowerCase();
+          if (selectedPromos.has(promo) && brand) {
+            allowed.add(brand);
+          }
+        });
+
+        return allowed;
+      }
+
+      function enforceAllowedBrandSelection(allowedBrands, onlyAllowedBrands) {
+        if (!brandOptions || !onlyAllowedBrands || !(allowedBrands instanceof Set)) return;
+        Array.from(brandOptions.querySelectorAll('input[type="checkbox"]')).forEach(function (input) {
+          var value = String(input.value || '').toLowerCase();
+          if (input.checked && !allowedBrands.has(value)) {
+            input.checked = false;
+          }
         });
       }
 
@@ -492,10 +544,14 @@ window.CotoSorter.vistaLigera = (function () {
         var maxVal = parseFloat(priceMaxInput && priceMaxInput.value);
         var hasMin = Number.isFinite(minVal);
         var hasMax = Number.isFinite(maxVal);
-        var selectedBrands = getCheckedValues(brandOptions);
         var selectedPromos = getCheckedValues(promoOptions);
+        var onlyAllowedBrands = selectedPromos.size > 0;
+        var allowedBrands = getAllowedBrandsFromPromos(selectedPromos);
+
+        enforceAllowedBrandSelection(allowedBrands, onlyAllowedBrands);
+
+        var selectedBrands = getCheckedValues(brandOptions);
         var visibleCount = 0;
-        var visibleBrands = new Set();
         var hasFilter = !!(normalizedTerm || selected || hasMin || hasMax || selectedBrands.size > 0 || selectedPromos.size > 0);
 
         cards.forEach(function (card) {
@@ -526,11 +582,11 @@ window.CotoSorter.vistaLigera = (function () {
           card.classList.toggle('hidden', !match);
           if (match) {
             visibleCount++;
-            if (brand) visibleBrands.add(brand);
           }
         });
         groups.forEach(updateGroup);
-        updateAvailableBrandHighlight(selectedPromos.size > 0, visibleBrands);
+        updateAvailableBrandHighlight(onlyAllowedBrands, allowedBrands || new Set());
+        filterBrandOptions(brandSearchInput ? brandSearchInput.value : '', allowedBrands, onlyAllowedBrands);
         clearBtn.classList.toggle('visible', !!normalizedTerm);
         countEl.textContent = hasFilter
           ? visibleCount + ' resultado' + (visibleCount !== 1 ? 's' : '')
@@ -562,10 +618,10 @@ window.CotoSorter.vistaLigera = (function () {
       if (priceMaxInput) priceMaxInput.addEventListener('input', function () { filter(input.value, unitSelect.value); });
       if (rangeUseUnit) rangeUseUnit.addEventListener('change', function () { filter(input.value, unitSelect.value); });
       if (brandOptions) brandOptions.addEventListener('change', function () { filter(input.value, unitSelect.value); });
-      if (brandSearchInput) brandSearchInput.addEventListener('input', function () { filterBrandOptions(brandSearchInput.value); });
+      if (brandSearchInput) brandSearchInput.addEventListener('input', function () { filter(input.value, unitSelect.value); });
       if (promoOptions) promoOptions.addEventListener('change', function () { filter(input.value, unitSelect.value); });
 
-      filterBrandOptions('');
+      filterBrandOptions('', null, false);
       filter('', unitSelect.value);
 
       // ---- Colapso de grupos ----
