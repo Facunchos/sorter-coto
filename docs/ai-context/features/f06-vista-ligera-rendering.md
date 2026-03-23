@@ -17,6 +17,7 @@
 
 ## Dependencies
 - Reads from: `utils.formatPrice`, `utils.unitLabel`.
+- Reads from: `promoUtils.*` and `priceUtils.*` for promo/brand and resolved price logic.
 - Calls into: browser window/document APIs for generated page.
 - Writes to: generated HTML/CSS/JS in opened page context.
 
@@ -27,12 +28,20 @@
 4. Choose unit base from max format/reference/unit parsed values.
 5. Compute resolved unit price with single discount application.
 6. Render product cards with promo badge and unit price line.
-7. Build grouped sections and interactive header/filter controls.
+7. Attach card metadata (brand/promo/price/unit-price) for in-page filtering.
+8. Build grouped sections and interactive header/filter controls, including Marcas search and oferta-aware brand highlighting.
 
 ## Invariants
 - MUST avoid double-discounting unit prices.
 - MUST apply formula using regular unit base: `(promoPrice * unitBase) / regularPrice` when discount exists.
+- MUST only apply discount (green price + adjusted `$/X`) when promo text evidence exists (`promoTags`/`badges` meaningful token).
+- MUST sort cards by the same resolved `$/X` value that is rendered in each card.
 - MUST keep promo parsing tolerant to localized text variants.
+- MUST keep range filter switchable between product price and resolved `$/X` using checkbox mode.
+- MUST keep brand and oferta filters as multi-select include lists (checked values are visible values).
+- MUST keep default brand/oferta state with no checks as "show all" (opt-in narrowing).
+- MUST keep Marcas menu searchable by text for large brand sets.
+- MUST highlight in green the Marcas entries currently visible on screen when at least one Ofertas option is active.
 - Fallback behavior: if no valid discount inputs, show regular price path only.
 
 ## Failure Modes

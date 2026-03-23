@@ -436,9 +436,16 @@ window.CotoSorter.api = (function () {
       .map((x) => String(x || "").trim())
       .filter(Boolean);
 
+    const productBrand = String(data.product_brand || data.productBrand || data.brand || "").trim() || null;
+    const brandName = String(data.brandName || "").trim() || null;
+
 
     return {
       name,
+      brand: productBrand || brandName,
+      productBrand,
+      product_brand: productBrand,
+      brandName,
       href,
       imgSrc,
       priceText,
@@ -470,7 +477,14 @@ window.CotoSorter.api = (function () {
     const unitType = cFormatoToUnitType(cFormato);
     const priceText = formatApiPrice(activePrice);
 
-    return { name, imgSrc, activePrice, referencePrice, unitType, priceText, get };
+    const brand =
+      get("product.brand") ||
+      get("product.brandName") ||
+      get("product.marca") ||
+      get("brand") ||
+      null;
+
+    return { name, imgSrc, activePrice, referencePrice, unitType, priceText, brand, get };
   }
 
   /** Calcula el ratio de descuento a partir de dtoDescuentos o listPrice. */
@@ -516,7 +530,7 @@ window.CotoSorter.api = (function () {
   /** Parsea un registro Endeca al formato de producto interno. */
   function parseEndecaRecord(innerRecord) {
     const attr = innerRecord.attributes || {};
-    const { name, imgSrc, activePrice, referencePrice, unitType, priceText, get } = parseBasicInfo(attr);
+    const { name, imgSrc, activePrice, referencePrice, unitType, priceText, brand, get } = parseBasicInfo(attr);
 
     // URL del producto
     let href = null;
@@ -557,6 +571,9 @@ window.CotoSorter.api = (function () {
 
 
     return {
+      brand: brand ? String(brand).trim() : null,
+      productBrand: brand ? String(brand).trim() : null,
+      product_brand: brand ? String(brand).trim() : null,
       name, href, imgSrc, priceText, discountedPriceText, badges, unitPriceText, unitType,
       activePrice, referencePrice, adjustedReferencePrice, discountRatio,
       promoPriceRaw, promoTags,

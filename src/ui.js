@@ -4,7 +4,7 @@ window.CotoSorter = window.CotoSorter || {};
 window.CotoSorter.ui = (function () {
   "use strict";
 
-  const { FILTER_TYPES } = window.CotoSorter.utils;
+  const { FILTER_TYPES, normalizeAccents } = window.CotoSorter.utils;
   const { debugLog } = window.CotoSorter.logger;
   const { sortProducts } = window.CotoSorter.sorter;
   const { startRevistaGeneration, startRevistaHTMLGeneration } = window.CotoSorter.revista;
@@ -16,6 +16,57 @@ window.CotoSorter.ui = (function () {
   const filterDropdownItems = {};
   let btnOrdenar = null;
   let hasUsedVistaLigera = false;
+
+  function toSearchSlug(term) {
+    return normalizeAccents(term)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function triggerSiteSearch(searchTerm) {
+    const term = String(searchTerm || "").trim();
+    if (!term) return;
+
+    const inputSelectors = [
+      'input[type="search"]',
+      'input[name*="search" i]',
+      'input[id*="search" i]',
+      'input[placeholder*="buscar" i]',
+      'input[aria-label*="buscar" i]',
+    ];
+
+    let input = null;
+    for (const selector of inputSelectors) {
+      input = document.querySelector(selector);
+      if (input) break;
+    }
+
+    if (input) {
+      input.focus();
+      input.value = term;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
+
+      const form = input.closest("form");
+      if (form) {
+        form.requestSubmit ? form.requestSubmit() : form.submit();
+      } else {
+        const btn = document.querySelector('button[type="submit"], [aria-label*="buscar" i], .search-button');
+        if (btn) btn.click();
+      }
+
+      debugLog("Generar dropdown: Triggered on-page search", term);
+      return;
+    }
+
+    const slug = toSearchSlug(term);
+    const fallbackUrl = `${window.location.origin}/sitios/cdigi/productos/${slug}`;
+    window.open(fallbackUrl, "_blank");
+    debugLog("Generar dropdown: Fallback search via productos URL", fallbackUrl);
+  }
 
   function consumePendingVistaLigera() {
     const raw = sessionStorage.getItem(PENDING_VISTA_LIGERA_KEY);
@@ -224,24 +275,16 @@ window.CotoSorter.ui = (function () {
     });
     dropdown.appendChild(itemRevista);
 
-    // Vista Ligera HTML
-    const itemHTML = document.createElement("button");
-    itemHTML.className = "coto-sorter-dropdown-item";
-    itemHTML.textContent = "⚡ Vista Ligera";
-    itemHTML.title = "Abre una pestaña con los productos en HTML — sin descargar archivos";
-    itemHTML.addEventListener("click", () => {
+    // Búsqueda rápida de ejemplo
+    const itemLeche = document.createElement("button");
+    itemLeche.className = "coto-sorter-dropdown-item";
+    itemLeche.textContent = "🥛 Leche";
+    itemLeche.title = 'Busca "Leche 1 litro" en COTO';
+    itemLeche.addEventListener("click", () => {
       dropdown.classList.remove("coto-sorter-dropdown-open");
-      const count = getCount();
-      if (hasUsedVistaLigera) {
-        debugLog("Vista Ligera ya fue usada; recargando página para refrescar estado");
-        sessionStorage.setItem(PENDING_VISTA_LIGERA_KEY, count === null ? "" : String(count));
-        window.location.reload();
-        return;
-      }
-      hasUsedVistaLigera = true;
-      startRevistaHTMLGeneration(count, updateProgress);
+      triggerSiteSearch("Leche 1 litro");
     });
-    dropdown.appendChild(itemHTML);
+    dropdown.appendChild(itemLeche);
 
     // Indicador de progreso
     const progressEl = document.createElement("div");
@@ -264,6 +307,28 @@ window.CotoSorter.ui = (function () {
     wrap.appendChild(dropdown);
     wrap.appendChild(progressEl);
     return wrap;
+  }
+
+  function createVistaLigeraButton() {
+    const btn = document.createElement("button");
+    btn.className = "coto-sorter-btn";
+    btn.textContent = "⚡ Vista Ligera";
+    btn.title = "Abre una pestaña con los productos en HTML — sin descargar archivos";
+    btn.addEventListener("click", () => {
+      const countInput = document.querySelector(".coto-sorter-dropdown-input");
+      const count = countInput && countInput.value ? parseInt(countInput.value, 10) : null;
+
+      if (hasUsedVistaLigera) {
+        debugLog("Vista Ligera ya fue usada; recargando página para refrescar estado");
+        sessionStorage.setItem(PENDING_VISTA_LIGERA_KEY, count === null ? "" : String(count));
+        window.location.reload();
+        return;
+      }
+
+      hasUsedVistaLigera = true;
+      startRevistaHTMLGeneration(count, updateProgress);
+    });
+    return btn;
   }
 
   function createResetButton() {
@@ -303,6 +368,7 @@ window.CotoSorter.ui = (function () {
     const buttons = document.createElement("div");
     buttons.className = "coto-sorter-buttons";
 
+    buttons.appendChild(createVistaLigeraButton());
     buttons.appendChild(createOrdenarDropdown());
     buttons.appendChild(createGenerarDropdown());
     buttons.appendChild(createResetButton());

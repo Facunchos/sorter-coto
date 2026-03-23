@@ -13,7 +13,7 @@
 
 ## Inputs / Outputs
 - Inputs: `PerformanceResourceTiming`, current page URL, API JSON pages.
-- Outputs: normalized product list (name, prices, unit type, promo tags, image, href).
+- Outputs: normalized product list (name, brand, prices, unit type, promo tags, image, href).
 - Side effects: stores `capturedEndecaUrl` and `capturedBffUrl` in module state.
 
 ## Dependencies
@@ -38,6 +38,7 @@
 ## Invariants
 - MUST accept both Endeca and BFF sources.
 - MUST preserve category/page context when building URLs.
+- MUST preserve source brand metadata (`brand`/`productBrand`/`product_brand`) in normalized products when available.
 - MUST fail safely when one source is unavailable.
 - Fallback behavior: use `window.location.href` when captured URL is invalid for current page.
 

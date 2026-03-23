@@ -47,6 +47,13 @@ window.CotoSorter.utils = (function () {
     return "$" + intPart + "," + parts[1];
   }
 
+  /** Elimina acentos/diacríticos para comparaciones y slugs. */
+  function normalizeAccents(text) {
+    return String(text || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
   /** Normaliza texto de unidad del DOM a tipo interno ("weight", "volume", etc). */
   function normalizeUnitType(unitText, qty) {
     const lower = unitText.toLowerCase().trim();
@@ -121,6 +128,7 @@ window.CotoSorter.utils = (function () {
     parsePrice,
     formatPrice,
     formatApiPrice,
+    normalizeAccents,
     normalizeUnitType,
     cFormatoToUnitType,
     unitLabel,
