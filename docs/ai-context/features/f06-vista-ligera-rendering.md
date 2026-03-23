@@ -20,6 +20,7 @@
 - Reads from: `promoUtils.*` and `priceUtils.*` for promo/brand and resolved price logic.
 - Calls into: browser window/document APIs for generated page.
 - Writes to: generated HTML/CSS/JS in opened page context.
+- Visual layer: uses a tokenized inline CSS theme (`STYLES`) for professional styling, responsive layout, and subtle animations without changing filtering/sorting/pricing logic.
 
 ## Data Flow (5-8 steps)
 1. Parse loose money strings from product fields.
@@ -30,6 +31,7 @@
 6. Render product cards with promo badge and unit price line.
 7. Attach card metadata (brand/promo/price/unit-price) for in-page filtering.
 8. Build grouped sections and interactive header/filter controls, including Marcas search and oferta-aware brand highlighting.
+9. Build full page shell through `buildDocumentHTML(...)` helper to keep generation logic separate from UI markup scaffolding.
 
 ## Invariants
 - MUST avoid double-discounting unit prices.
@@ -44,6 +46,11 @@
 - MUST make Marcas options depend only on active Ofertas selection: when Ofertas is active, show only brands present in those oferta-matching products.
 - MUST show those oferta-available Marcas options in green while Ofertas is active.
 - MUST clear checked Marcas values that are no longer available after changing Ofertas.
+- MUST keep UI redesign changes behavior-neutral: style/layout/animation updates cannot alter data attributes, filter semantics, grouping, sorting, or pricing calculations.
+- MUST keep `Desde/Hasta`, `Marcas`, and `Ofertas` aligned in the same control row on desktop layouts.
+- MUST keep `Marcas` and `Ofertas` dropdown panels overlayed (no header/layout jump when opening).
+- MUST keep the footer always visible while browsing (fixed at viewport bottom) without covering interactive content.
+- MUST keep custom checkbox styling behavior-neutral in Marcas/Ofertas (visual enhancement only).
 - Fallback behavior: if no valid discount inputs, show regular price path only.
 
 ## Failure Modes
