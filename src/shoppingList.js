@@ -13,7 +13,7 @@ window.CotoSorter.shoppingList = (function () {
   const OVERLAY_CLASS = "coto-sorter-shopping-overlay";
 
   function toSlug(value) {
-    return normalizeAccents(value)
+    return normalizeAccents(String(value || ""))
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9]+/g, "-")
@@ -116,7 +116,7 @@ window.CotoSorter.shoppingList = (function () {
     if (overlay) overlay.remove();
   }
 
-  function createFavoriteRow(item, checked, onEdit, onDelete) {
+  function createFavoriteRow(item, checked, onEdit, onDelete, onToggleChecked) {
     const row = document.createElement("div");
     row.className = "coto-sorter-shopping-row";
 
@@ -127,6 +127,9 @@ window.CotoSorter.shoppingList = (function () {
     checkbox.type = "checkbox";
     checkbox.checked = checked;
     checkbox.dataset.favoriteId = item.id;
+    checkbox.addEventListener("change", () => {
+      if (onToggleChecked) onToggleChecked(item, checkbox.checked);
+    });
 
     checkboxWrap.appendChild(checkbox);
 
@@ -178,11 +181,28 @@ window.CotoSorter.shoppingList = (function () {
     return row;
   }
 
-  function createManualListRow(item, isActive, onSelect) {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "coto-sorter-shopping-manual-item";
+  function createManualListRow(item, isActive, checked, onSelect, onToggleChecked) {
+    const row = document.createElement("div");
+    row.className = "coto-sorter-shopping-row coto-sorter-shopping-manual-row";
     if (isActive) row.classList.add("is-active");
+
+    const checkboxWrap = document.createElement("label");
+    checkboxWrap.className = "coto-sorter-shopping-row-check";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = checked;
+    checkbox.dataset.manualListId = item.id;
+    checkbox.addEventListener("change", () => {
+      if (onToggleChecked) onToggleChecked(item, checkbox.checked);
+    });
+
+    checkboxWrap.appendChild(checkbox);
+
+    const body = document.createElement("button");
+    body.type = "button";
+    body.className = "coto-sorter-shopping-manual-item";
+    if (isActive) body.classList.add("is-active");
 
     const text = document.createElement("div");
     text.className = "coto-sorter-shopping-manual-item-text";
@@ -192,12 +212,14 @@ window.CotoSorter.shoppingList = (function () {
     meta.className = "coto-sorter-shopping-manual-item-meta";
     meta.textContent = `${parseListLines(item.text).length} ítems`;
 
-    row.appendChild(text);
-    row.appendChild(meta);
-    row.addEventListener("click", () => {
+    body.appendChild(text);
+    body.appendChild(meta);
+    body.addEventListener("click", () => {
       if (onSelect) onSelect(item);
     });
 
+    row.appendChild(checkboxWrap);
+    row.appendChild(body);
     return row;
   }
 
@@ -216,7 +238,7 @@ window.CotoSorter.shoppingList = (function () {
     };
   }
 
-  async function openSelectedItems(selectedFavorites, manualTerms) {
+  async function openSelectedItems(selectedFavorites, selectedManualLists) {
     const items = [];
 
     for (const fav of selectedFavorites) {
@@ -228,15 +250,18 @@ window.CotoSorter.shoppingList = (function () {
       });
     }
 
-    for (const term of manualTerms) {
-      const normalizedTerm = normalizeSearchTerm(term);
-      if (!normalizedTerm) continue;
-      items.push({
-        id: toSlug(normalizedTerm),
-        name: normalizedTerm,
-        brand: "",
-        searchTerm: normalizedTerm,
-      });
+    for (const manualList of selectedManualLists) {
+      const listLines = parseListLines(manualList.text);
+      for (const [index, term] of listLines.entries()) {
+        const normalizedTerm = normalizeSearchTerm(term);
+        if (!normalizedTerm) continue;
+        items.push({
+          id: `${manualList.id}:${index}:${toSlug(normalizedTerm)}`,
+          name: normalizedTerm,
+          brand: "",
+          searchTerm: normalizedTerm,
+        });
+      }
     }
 
     if (items.length === 0) {
@@ -347,8 +372,15 @@ window.CotoSorter.shoppingList = (function () {
     newManualBtn.type = "button";
     newManualBtn.textContent = "Nueva lista";
 
+    const deleteManualBtn = document.createElement("button");
+    deleteManualBtn.className = "coto-sorter-btn coto-sorter-shopping-secondary";
+    deleteManualBtn.type = "button";
+    deleteManualBtn.textContent = "Eliminar lista";
+    deleteManualBtn.disabled = true;
+
     manualActions.appendChild(saveManualBtn);
     manualActions.appendChild(newManualBtn);
+    manualActions.appendChild(deleteManualBtn);
 
     const manualListsWrap = document.createElement("div");
     manualListsWrap.className = "coto-sorter-shopping-favorites";
@@ -407,14 +439,21 @@ window.CotoSorter.shoppingList = (function () {
     openBtn.className = "coto-sorter-btn coto-sorter-shopping-primary";
     openBtn.type = "button";
     openBtn.textContent = "Abrir seleccionados";
+    openBtn.disabled = true;
 
     const selectAllBtn = document.createElement("button");
     selectAllBtn.className = "coto-sorter-btn coto-sorter-shopping-secondary";
     selectAllBtn.type = "button";
     selectAllBtn.textContent = "Seleccionar todo";
 
+    const deselectAllBtn = document.createElement("button");
+    deselectAllBtn.className = "coto-sorter-btn coto-sorter-shopping-secondary";
+    deselectAllBtn.type = "button";
+    deselectAllBtn.textContent = "Deseleccionar todo";
+
     footerActions.appendChild(openBtn);
     footerActions.appendChild(selectAllBtn);
+    footerActions.appendChild(deselectAllBtn);
 
     manualPanel.appendChild(manualTop);
     favoritesPanel.appendChild(favoritesTop);
@@ -436,11 +475,15 @@ window.CotoSorter.shoppingList = (function () {
     let favoritesState = [];
     let manualListsState = [];
     let selectedManualList = null;
-    let activeTab = "manual";
     let favoritesExpanded = true;
+    const selectedFavoriteIds = new Set();
+    const selectedManualListIds = new Set();
+
+    function updateActionButtonState() {
+      openBtn.disabled = selectedFavoriteIds.size === 0 && selectedManualListIds.size === 0;
+    }
 
     function setActiveTab(tab) {
-      activeTab = tab;
       manualTabBtn.classList.toggle("is-active", tab === "manual");
       favoritesTabBtn.classList.toggle("is-active", tab === "favorites");
       manualPanel.hidden = tab !== "manual";
@@ -459,6 +502,38 @@ window.CotoSorter.shoppingList = (function () {
       favorites.saveDraftText(manualInput.value);
     }
 
+    function setFavoriteChecked(item, checked) {
+      if (checked) {
+        selectedFavoriteIds.add(item.id);
+      } else {
+        selectedFavoriteIds.delete(item.id);
+      }
+      updateActionButtonState();
+    }
+
+    function setManualListChecked(item, checked) {
+      if (checked) {
+        selectedManualListIds.add(item.id);
+      } else {
+        selectedManualListIds.delete(item.id);
+      }
+      updateActionButtonState();
+    }
+
+    function setAllSelections(checked) {
+      for (const item of favoritesState) setFavoriteChecked(item, checked);
+      for (const item of manualListsState) setManualListChecked(item, checked);
+
+      favoritesList.querySelectorAll('input[type="checkbox"][data-favorite-id]').forEach((checkbox) => {
+        checkbox.checked = checked;
+      });
+      manualListsList.querySelectorAll('input[type="checkbox"][data-manual-list-id]').forEach((checkbox) => {
+        checkbox.checked = checked;
+      });
+
+      updateActionButtonState();
+    }
+
     async function refreshManualListsList() {
       manualListsState = await favorites.getManualLists();
       manualListsList.textContent = "";
@@ -472,16 +547,23 @@ window.CotoSorter.shoppingList = (function () {
       }
 
       for (const item of manualListsState) {
-        const row = createManualListRow(item, selectedManualList?.id === item.id, async (currentItem) => {
-          selectedManualList = currentItem;
-          manualNameInput.value = currentItem.name;
-          manualInput.value = currentItem.text;
-          manualStatus.textContent = `Editando: ${currentItem.name}`;
-          await favorites.saveDraftManualListName(manualNameInput.value);
-          await favorites.saveDraftText(manualInput.value);
-          await refreshManualListsList();
-          setActiveTab("manual");
-        });
+        const row = createManualListRow(
+          item,
+          selectedManualList?.id === item.id,
+          selectedManualListIds.has(item.id),
+          async (currentItem) => {
+            selectedManualList = currentItem;
+            manualNameInput.value = currentItem.name;
+            manualInput.value = currentItem.text;
+            manualStatus.textContent = `Editando: ${currentItem.name}`;
+            deleteManualBtn.disabled = false;
+            await favorites.saveDraftManualListName(manualNameInput.value);
+            await favorites.saveDraftText(manualInput.value);
+            await refreshManualListsList();
+            setActiveTab("manual");
+          },
+          (currentItem, checked) => setManualListChecked(currentItem, checked)
+        );
         manualListsList.appendChild(row);
       }
     }
@@ -501,7 +583,7 @@ window.CotoSorter.shoppingList = (function () {
       for (const item of favoritesState) {
         const row = createFavoriteRow(
           item,
-          true,
+          selectedFavoriteIds.has(item.id),
           async (currentItem) => {
             const currentText = [currentItem.name, currentItem.writtenText || currentItem.searchTerm || currentItem.name]
               .filter(Boolean)
@@ -538,8 +620,11 @@ window.CotoSorter.shoppingList = (function () {
               return;
             }
 
+            selectedFavoriteIds.delete(currentItem.id);
+            updateActionButtonState();
             await refreshFavoritesList();
-          }
+          },
+          (currentItem, checked) => setFavoriteChecked(currentItem, checked)
         );
         favoritesList.appendChild(row);
       }
@@ -563,6 +648,7 @@ window.CotoSorter.shoppingList = (function () {
       syncManualDrafts();
 
       let result = null;
+      const currentSelectedManualId = selectedManualList ? selectedManualList.id : null;
       if (selectedManualList && currentName === selectedManualList.name) {
         result = await favorites.updateManualList(selectedManualList.id, {
           name: currentName,
@@ -580,13 +666,20 @@ window.CotoSorter.shoppingList = (function () {
         return;
       }
 
+      if (currentSelectedManualId && currentSelectedManualId !== result.manualList.id) {
+        selectedManualListIds.delete(currentSelectedManualId);
+      }
+
       selectedManualList = result.manualList;
+      selectedManualListIds.add(result.manualList.id);
       manualNameInput.value = result.manualList.name;
       manualInput.value = result.manualList.text;
       manualStatus.textContent = `Guardada: ${result.manualList.name}`;
+      deleteManualBtn.disabled = false;
       await favorites.saveDraftManualListName(manualNameInput.value);
       await favorites.saveDraftText(manualInput.value);
       await refreshManualListsList();
+      updateActionButtonState();
     }
 
     manualNameInput.addEventListener("input", () => {
@@ -611,6 +704,7 @@ window.CotoSorter.shoppingList = (function () {
 
     newManualBtn.addEventListener("click", async () => {
       selectedManualList = null;
+      deleteManualBtn.disabled = true;
       manualNameInput.value = "";
       manualInput.value = "";
       manualStatus.textContent = "Nueva lista";
@@ -618,6 +712,34 @@ window.CotoSorter.shoppingList = (function () {
       await favorites.saveDraftText("");
       await refreshManualListsList();
       manualNameInput.focus();
+      updateActionButtonState();
+    });
+
+    deleteManualBtn.addEventListener("click", async () => {
+      if (!selectedManualList) {
+        alert("Seleccioná una lista manual para eliminar.");
+        return;
+      }
+
+      const confirmed = window.confirm(`Eliminar la lista manual \"${selectedManualList.name}\"?`);
+      if (!confirmed) return;
+
+      const removed = await favorites.removeManualList(selectedManualList.id);
+      if (!removed) {
+        alert("No se pudo eliminar la lista.");
+        return;
+      }
+
+      selectedManualListIds.delete(selectedManualList.id);
+      selectedManualList = null;
+      manualNameInput.value = "";
+      manualInput.value = "";
+      manualStatus.textContent = "Lista eliminada";
+      deleteManualBtn.disabled = true;
+      await favorites.saveDraftManualListName("");
+      await favorites.saveDraftText("");
+      await refreshManualListsList();
+      updateActionButtonState();
     });
 
     favoritesCollapseBtn.addEventListener("click", () => {
@@ -627,25 +749,16 @@ window.CotoSorter.shoppingList = (function () {
     manualTabBtn.addEventListener("click", () => setActiveTab("manual"));
     favoritesTabBtn.addEventListener("click", () => setActiveTab("favorites"));
 
-    selectAllBtn.addEventListener("click", () => {
-      favoritesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-        checkbox.checked = true;
-      });
-    });
+    selectAllBtn.addEventListener("click", () => setAllSelections(true));
+    deselectAllBtn.addEventListener("click", () => setAllSelections(false));
 
     openBtn.addEventListener("click", async () => {
-      const selectedFavorites = [];
-      favoritesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-        if (!checkbox.checked) return;
-        const favorite = favoritesState.find((item) => item.id === checkbox.dataset.favoriteId);
-        if (favorite) selectedFavorites.push(favorite);
-      });
-
-      const manualTerms = parseListLines(manualInput.value);
+      const selectedFavorites = favoritesState.filter((item) => selectedFavoriteIds.has(item.id));
+      const selectedManualLists = manualListsState.filter((item) => selectedManualListIds.has(item.id));
 
       await favorites.saveDraftManualListName(manualNameInput.value);
       await favorites.saveDraftText(manualInput.value);
-      openSelectedItems(selectedFavorites, manualTerms);
+      await openSelectedItems(selectedFavorites, selectedManualLists);
     });
 
     manualNameInput.value = await favorites.getDraftManualListName();
@@ -656,6 +769,7 @@ window.CotoSorter.shoppingList = (function () {
     await refreshFavoritesList();
     setActiveTab("manual");
     setFavoritesExpanded(true);
+    updateActionButtonState();
   }
 
   async function toggleFavoriteFromCard(data) {

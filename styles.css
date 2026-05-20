@@ -561,13 +561,15 @@
 .coto-sorter-shopping-list {
   display: grid;
   gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   max-height: 260px;
   overflow: auto;
   padding-right: 4px;
 }
 
 .coto-sorter-shopping-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
@@ -575,6 +577,7 @@
   border-radius: 12px;
   background: #fff;
   cursor: pointer;
+  min-width: 0;
 }
 
 .coto-sorter-shopping-row-check {
@@ -599,12 +602,15 @@
   font-size: 13px;
   color: #3d302b;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .coto-sorter-shopping-row-note {
   font-size: 12px;
   color: #7f6d65;
   line-height: 1.35;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -619,9 +625,14 @@
   max-height: 220px;
 }
 
+.coto-sorter-shopping-manual-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 .coto-sorter-shopping-manual-item {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
@@ -649,6 +660,8 @@
 .coto-sorter-shopping-manual-item-text {
   font-size: 13px;
   font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .coto-sorter-shopping-manual-item-meta {
@@ -695,10 +708,9 @@
 }
 
 .coto-sorter-shopping-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .coto-sorter-shopping-primary {
@@ -722,6 +734,22 @@
 .coto-sorter-shopping-close {
   width: auto;
   justify-self: end;
+}
+
+@media (max-width: 900px) {
+  .coto-sorter-shopping-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .coto-sorter-shopping-list {
+    grid-template-columns: 1fr;
+  }
+
+  .coto-sorter-shopping-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---- Progress indicator ---- */

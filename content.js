@@ -7,8 +7,13 @@
   const { injectBadgeOnProduct, injectAllBadges } = window.CotoSorter.badges;
   const { getIsSorting, getCurrentFilter, sortProducts } = window.CotoSorter.sorter;
   const { setupApiUrlCapture } = window.CotoSorter.api;
-  const { injectUI } = window.CotoSorter.ui;
-  const { maybeAutoRunBatch } = window.CotoSorter.shoppingList;
+  function getUIModule() {
+    return window.CotoSorter.ui || null;
+  }
+
+  function getShoppingListModule() {
+    return window.CotoSorter.shoppingList || null;
+  }
 
   // ---- MutationObserver ----
   let observer = null;
@@ -56,9 +61,17 @@
     debugLog("Initializing Coto Sorter");
 
     setupApiUrlCapture();
-    injectUI();
+    const uiModule = getUIModule();
+    if (uiModule && typeof uiModule.injectUI === "function") {
+      uiModule.injectUI();
+    } else {
+      debugLog("UI module not ready; panel injection skipped");
+    }
     setupObserver();
-    maybeAutoRunBatch();
+    const shoppingListModule = getShoppingListModule();
+    if (shoppingListModule && typeof shoppingListModule.maybeAutoRunBatch === "function") {
+      shoppingListModule.maybeAutoRunBatch();
+    }
 
     // Inyectar badges iniciales tras render de Angular
     setTimeout(() => {

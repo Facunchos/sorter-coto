@@ -29,13 +29,16 @@
 3. The manual tab lets the user type a list name plus one item per line, then save it as a reusable list entry.
 4. Clicking a saved manual list loads its name and text back into the same editor.
 5. Saving with the same loaded name updates that list; changing the name creates a new saved list entry.
-6. For each item, the launcher opens a new search tab with a hash marker.
-7. The opened tab waits for product cards to appear instead of relying on a blind one-shot timeout.
-8. If the hash marker is present, the tab uses a per-tab `sessionStorage` key to avoid duplicate runs.
-9. Once the target page is ready, the tab runs the existing Vista Ligera generation flow for that search result page.
-10. After launching Vista Ligera, the search tab closes itself so only the result tab stays open.
-11. Temporary state is kept local to the tab and not shared across other tabs.
-12. Favorite rows can be edited or removed directly from the modal, with basic validation on the edited name.
+6. Favorites and saved manual lists each expose their own checkboxes so the user can select favorites, lists, or both.
+7. The launcher expands selected manual lists into individual search items, one per line.
+8. For each item, the launcher opens a new search tab with a hash marker.
+9. The opened tab waits for product cards to appear instead of relying on a blind one-shot timeout.
+10. If the hash marker is present, the tab uses a per-tab `sessionStorage` key to avoid duplicate runs.
+11. Once the target page is ready, the tab runs the existing Vista Ligera generation flow for that search result page.
+12. After launching Vista Ligera, the search tab closes itself so only the result tab stays open.
+13. Temporary state is kept local to the tab and not shared across other tabs.
+14. Favorite rows can be edited or removed directly from the modal, with basic validation on the edited name.
+15. Active manual lists can be deleted from the editor row.
 
 ## Invariants
 - Each job must be namespaced so one item cannot overwrite another item’s state.
@@ -67,8 +70,10 @@
 
 ## UI Notes
 - The modal now has a `Listas Manuales` tab and a collapsible `Favoritos Guardados` section.
+- The save, new, delete, open, select all, and deselect all actions are arranged in compact single rows.
 - Manual lists are saved as named items, and clicking one reloads the same textarea for editing.
 - The favorites section starts expanded but can be collapsed to reduce visual noise.
+- Saved favorites and saved manual lists are displayed as compact grid cards that wrap long names safely.
 
 ## Edit Impact Checklist
 - If tab orchestration changes, review `features/f07-ui-panel-actions.md`.

@@ -53,8 +53,10 @@ Esta extensión:
 - En **Listas Manuales** podés escribir un nombre y una lista de ítems, guardarla y volver a abrirla después.
 - Si abrís una lista guardada, el nombre y el texto vuelven al mismo editor para que la modifiques.
 - Si guardás con el mismo nombre de la lista abierta, se actualiza; si cambiás el nombre, se crea una nueva lista.
+- Cada lista guardada y cada favorito tiene su propio checkbox para buscar favoritos, listas o ambos.
 - El texto escrito en el modal se guarda localmente para la próxima vez.
 - La sección de **Favoritos Guardados** es colapsable para dejar la lista más ordenada.
+- Podés borrar la lista manual activa desde el mismo bloque donde guardás y creás listas.
 - Usá el icono de basura para borrar un favorito con confirmación.
 
 ## Modo Debug

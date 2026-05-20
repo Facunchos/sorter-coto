@@ -7,8 +7,6 @@ window.CotoSorter.ui = (function () {
   const { FILTER_TYPES, normalizeAccents } = window.CotoSorter.utils;
   const { debugLog } = window.CotoSorter.logger;
   const { sortProducts } = window.CotoSorter.sorter;
-  const { startRevistaGeneration, startRevistaHTMLGeneration } = window.CotoSorter.revista;
-  const { openShoppingListModal } = window.CotoSorter.shoppingList;
   const { showOpinionesPopup } = window.CotoSorter.opiniones;
 
   const PENDING_VISTA_LIGERA_KEY = "cotoSorterPendingVistaLigera";
@@ -17,6 +15,14 @@ window.CotoSorter.ui = (function () {
   const filterDropdownItems = {};
   let btnOrdenar = null;
   let hasUsedVistaLigera = false;
+
+  function getRevistaModule() {
+    return window.CotoSorter.revista || null;
+  }
+
+  function getShoppingListModule() {
+    return window.CotoSorter.shoppingList || null;
+  }
 
   function toSearchSlug(term) {
     return normalizeAccents(term)
@@ -96,7 +102,10 @@ window.CotoSorter.ui = (function () {
     debugLog("Vista Ligera pendiente detectada tras recarga; ejecutando generación automática");
 
     setTimeout(() => {
-      startRevistaHTMLGeneration(count, updateProgress);
+      const revistaModule = getRevistaModule();
+      if (revistaModule && typeof revistaModule.startRevistaHTMLGeneration === "function") {
+        revistaModule.startRevistaHTMLGeneration(count, updateProgress);
+      }
     }, 250);
   }
 
@@ -272,7 +281,10 @@ window.CotoSorter.ui = (function () {
     itemRevista.title = "Abre una revista imprimible (podés guardarla como PDF desde el navegador)";
     itemRevista.addEventListener("click", () => {
       dropdown.classList.remove("coto-sorter-dropdown-open");
-      startRevistaGeneration(getCount(), updateProgress);
+      const revistaModule = getRevistaModule();
+      if (revistaModule && typeof revistaModule.startRevistaGeneration === "function") {
+        revistaModule.startRevistaGeneration(getCount(), updateProgress);
+      }
     });
     dropdown.appendChild(itemRevista);
 
@@ -316,7 +328,10 @@ window.CotoSorter.ui = (function () {
       }
 
       hasUsedVistaLigera = true;
-      startRevistaHTMLGeneration(count, updateProgress);
+      const revistaModule = getRevistaModule();
+      if (revistaModule && typeof revistaModule.startRevistaHTMLGeneration === "function") {
+        revistaModule.startRevistaHTMLGeneration(count, updateProgress);
+      }
     });
     return btn;
   }
@@ -327,7 +342,10 @@ window.CotoSorter.ui = (function () {
     btn.textContent = "Lista";
     btn.title = "Abrir la lista de compras y favoritos";
     btn.addEventListener("click", () => {
-      if (openShoppingListModal) openShoppingListModal();
+      const shoppingListModule = getShoppingListModule();
+      if (shoppingListModule && typeof shoppingListModule.openShoppingListModal === "function") {
+        shoppingListModule.openShoppingListModal();
+      }
     });
     return btn;
   }
