@@ -8,6 +8,7 @@
   const { getIsSorting, getCurrentFilter, sortProducts } = window.CotoSorter.sorter;
   const { setupApiUrlCapture } = window.CotoSorter.api;
   const { injectUI } = window.CotoSorter.ui;
+  const { maybeAutoRunBatch } = window.CotoSorter.shoppingList;
 
   // ---- MutationObserver ----
   let observer = null;
@@ -57,6 +58,7 @@
     setupApiUrlCapture();
     injectUI();
     setupObserver();
+    maybeAutoRunBatch();
 
     // Inyectar badges iniciales tras render de Angular
     setTimeout(() => {

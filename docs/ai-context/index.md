@@ -23,6 +23,7 @@
 - `features/f06-vista-ligera-rendering.md`: lightweight HTML view, promo inference, resolved unit prices.
 - `features/f07-ui-panel-actions.md`: floating panel UX, dropdown actions, progress updates.
 - `features/f08-utils-and-normalization.md`: shared constants, parsing, unit normalization.
+- `features/f09-shopping-list-batch-flow.md`: favorites, shopping-list modal, tab orchestration, and per-item search flow.
 
 ## Cross-Feature Invariants
 - Only `data-coto-sorter-processed="done"` is terminal. `"no-data"` wrappers must be retried.

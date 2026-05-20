@@ -6,6 +6,7 @@ window.CotoSorter.badges = (function () {
 
   const { UNIT_PRICE_REGEX, UNIT_QTY_REGEX, BADGE_CLASS, BADGE_ATTR,
           parsePrice, formatPrice, normalizeUnitType, unitLabel } = window.CotoSorter.utils;
+  const { resolveBrand } = window.CotoSorter.promoUtils;
 
   /** Extrae datos de precio unitario ajustado de un elemento producto del DOM. */
   function extractProductData(productEl) {
@@ -112,6 +113,9 @@ window.CotoSorter.badges = (function () {
     const productEl = wrapper.querySelector("catalogue-product, constructor-result-item, .card-container");
     if (!productEl) return;
 
+    const existingFavorite = wrapper.querySelector(".coto-sorter-favorite-btn");
+    if (existingFavorite) existingFavorite.remove();
+
     const data = extractProductData(productEl);
 
     const existingBadge = wrapper.querySelector("." + BADGE_CLASS);
@@ -141,6 +145,47 @@ window.CotoSorter.badges = (function () {
       cardContainer.insertBefore(badge, cardContainer.firstChild);
     } else {
       wrapper.insertBefore(badge, wrapper.firstChild);
+    }
+
+    const nameEl = productEl.querySelector(".nombre-producto, h3, h4.card-title, .card-title");
+    const name = String(nameEl?.textContent || nameEl?.innerText || "").trim();
+    if (name) {
+      const hrefEl = wrapper.querySelector("a[href]") || productEl.querySelector("a[href]");
+      const imgEl = wrapper.querySelector("img") || productEl.querySelector("img");
+      const favoriteData = {
+        name,
+        brand: resolveBrand({ name }),
+        href: String(hrefEl?.href || ""),
+        imgSrc: String(imgEl?.src || ""),
+        searchTerm: name,
+      };
+
+      if (window.CotoSorter.favorites && window.CotoSorter.favorites.buildFavoriteId) {
+        favoriteData.id = window.CotoSorter.favorites.buildFavoriteId(favoriteData);
+      }
+
+      const favoriteBtn = document.createElement("button");
+      favoriteBtn.type = "button";
+      favoriteBtn.className = "coto-sorter-favorite-btn";
+      favoriteBtn.setAttribute("aria-label", "Guardar en favoritos");
+
+      favoriteBtn.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!window.CotoSorter.shoppingList) return;
+        await window.CotoSorter.shoppingList.toggleFavoriteFromCard(favoriteData);
+        if (window.CotoSorter.shoppingList.refreshFavoriteButton) {
+          window.CotoSorter.shoppingList.refreshFavoriteButton(favoriteBtn, favoriteData);
+        }
+      });
+
+      wrapper.insertBefore(favoriteBtn, wrapper.firstChild);
+      if (window.CotoSorter.shoppingList && window.CotoSorter.shoppingList.refreshFavoriteButton) {
+        window.CotoSorter.shoppingList.refreshFavoriteButton(favoriteBtn, favoriteData);
+      } else {
+        favoriteBtn.textContent = "♡";
+      }
     }
 
     wrapper.setAttribute(BADGE_ATTR, "done");

@@ -339,6 +339,187 @@
   cursor: not-allowed;
 }
 
+.coto-sorter-btn-shopping {
+  border-color: #1f9866;
+  color: #1f9866;
+}
+
+.coto-sorter-btn-shopping:hover {
+  background: #e8f7ef;
+  border-color: #1f9866;
+}
+
+.coto-sorter-favorite-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 11;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid #d7b4a6;
+  background: rgba(255, 255, 255, 0.96);
+  color: #7b5a4f;
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(88, 55, 38, 0.15);
+  transition: transform 150ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.coto-sorter-favorite-btn:hover {
+  transform: translateY(-1px);
+  background: #fff6f2;
+  color: #d24f3d;
+  border-color: #d8a18f;
+}
+
+.coto-sorter-favorite-btn.is-saved {
+  background: #1f9866;
+  color: #fff;
+  border-color: #1f9866;
+}
+
+.coto-sorter-shopping-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  background: rgba(46, 38, 34, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.coto-sorter-shopping-modal {
+  width: min(680px, 100%);
+  max-height: min(88vh, 920px);
+  overflow: auto;
+  background: #fffdfb;
+  border: 2px solid #e20025;
+  border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(42, 21, 14, 0.28);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.coto-sorter-shopping-header {
+  display: grid;
+  gap: 4px;
+}
+
+.coto-sorter-shopping-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #5d3f35;
+}
+
+.coto-sorter-shopping-subtitle {
+  font-size: 13px;
+  color: #75635c;
+  line-height: 1.4;
+}
+
+.coto-sorter-shopping-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5b4a43;
+}
+
+.coto-sorter-shopping-textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e4cfc7;
+  background: #fff;
+  color: #2e2622;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.coto-sorter-shopping-textarea:focus {
+  outline: none;
+  border-color: #d75d48;
+  box-shadow: 0 0 0 3px rgba(215, 93, 72, 0.15);
+}
+
+.coto-sorter-shopping-favorites {
+  display: grid;
+  gap: 8px;
+}
+
+.coto-sorter-shopping-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.coto-sorter-shopping-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #efd8cd;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.coto-sorter-shopping-row input {
+  margin-top: 3px;
+}
+
+.coto-sorter-shopping-row-text {
+  font-size: 13px;
+  color: #3d302b;
+  line-height: 1.35;
+}
+
+.coto-sorter-shopping-empty {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed #d7b4a6;
+  color: #7a655d;
+  font-size: 13px;
+  background: #fffaf7;
+}
+
+.coto-sorter-shopping-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.coto-sorter-shopping-primary {
+  border-color: #1f9866;
+  color: #1f9866;
+}
+
+.coto-sorter-shopping-primary:hover {
+  background: #e8f7ef;
+}
+
+.coto-sorter-shopping-secondary {
+  border-color: #888;
+  color: #555;
+}
+
+.coto-sorter-shopping-secondary:hover {
+  background: #f5f5f5;
+}
+
+.coto-sorter-shopping-close {
+  width: auto;
+  justify-self: end;
+}
+
 /* ---- Progress indicator ---- */
 .coto-sorter-progress {
   display: none;

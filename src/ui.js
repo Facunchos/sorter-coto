@@ -8,6 +8,7 @@ window.CotoSorter.ui = (function () {
   const { debugLog } = window.CotoSorter.logger;
   const { sortProducts } = window.CotoSorter.sorter;
   const { startRevistaGeneration, startRevistaHTMLGeneration } = window.CotoSorter.revista;
+  const { openShoppingListModal } = window.CotoSorter.shoppingList;
   const { showOpinionesPopup } = window.CotoSorter.opiniones;
 
   const PENDING_VISTA_LIGERA_KEY = "cotoSorterPendingVistaLigera";
@@ -320,6 +321,17 @@ window.CotoSorter.ui = (function () {
     return btn;
   }
 
+  function createShoppingListButton() {
+    const btn = document.createElement("button");
+    btn.className = "coto-sorter-btn coto-sorter-btn-shopping";
+    btn.textContent = "Lista";
+    btn.title = "Abrir la lista de compras y favoritos";
+    btn.addEventListener("click", () => {
+      if (openShoppingListModal) openShoppingListModal();
+    });
+    return btn;
+  }
+
   function createResetButton() {
     const btn = document.createElement("button");
     btn.className = "coto-sorter-btn coto-sorter-btn-reset";
@@ -360,6 +372,7 @@ window.CotoSorter.ui = (function () {
     buttons.appendChild(createVistaLigeraButton());
     buttons.appendChild(createOrdenarDropdown());
     buttons.appendChild(createGenerarDropdown());
+    buttons.appendChild(createShoppingListButton());
     buttons.appendChild(createResetButton());
 
     const separator = document.createElement("hr");

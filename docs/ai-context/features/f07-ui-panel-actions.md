@@ -10,6 +10,7 @@
 - `injectUI()` in `src/ui.js`
 - `updateProgress(text, pct)` in `src/ui.js`
 - delayed action helper `scheduleVistaLigeraAfterReload()` in `src/ui.js`
+- shopping list launcher button in `src/ui.js` that opens the favorites/modal flow
 
 ## Inputs / Outputs
 - Inputs: user clicks, optional count input, session storage pending flags.
@@ -26,15 +27,17 @@
 2. Top-level `Vista Ligera` button triggers HTML generation flow.
 3. Sort dropdown maps each filter to `sortProducts` callback.
 4. Generate dropdown routes to printable generation flow.
-5. For repeated Vista Ligera use, persist pending count and reload page.
-6. On next load, consume pending flag and auto-run Vista Ligera.
-7. Reset action restores original product order.
+5. Shopping list button opens the local favorites modal and batch launcher.
+6. For repeated Vista Ligera use, persist pending count and reload page.
+7. On next load, consume pending flag and auto-run Vista Ligera.
+8. Reset action restores original product order.
 
 ## Invariants
 - MUST keep `FILTER_TYPES` keys aligned with sorter logic.
 - MUST remove pending Vista Ligera key after consuming it.
 - MUST keep UI order: `Vista Ligera`, `Ordenar`, `Generar`.
 - MUST close dropdowns after action selection.
+- MUST keep the shopping-list button local-only and non-blocking for the primary control order.
 - MUST prefer native on-page search input/form when available; fallback must use `/sitios/cdigi/productos/<slug>` URL format.
 - MUST keep slug normalization accent-insensitive using shared `utils.normalizeAccents`.
 - Fallback behavior: empty count means all products.
@@ -48,4 +51,5 @@
 - If filter options change, review `features/f03-sorting-and-order-state.md` and `features/f08-utils-and-normalization.md`.
 - If progress semantics change, review `features/f05-revista-generation.md`.
 - Tests/manual checks: sort, reset, revista, vista ligera repeat run.
+- If shopping-list behavior changes, review `features/f09-shopping-list-batch-flow.md`.
 - `NEEDS_CODE_CHECK`: yes
