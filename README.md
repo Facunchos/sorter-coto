@@ -42,8 +42,17 @@ Esta extensión:
 2. Aparece un **panel flotante** (arrastrable y minimizable) con:
    - **Ordenar** — elegí criterio: $/Kg, $/L, $/100g, $/m², $/Unidad
    - **Generar** — "Revista (Imprimible/PDF)" o vista HTML ligera
+   - **Lista** — guardá favoritos, editalos o borrarlos, y reabrí una lista persistida
    - **Reset** — restaurá el orden original
 3. Los **badges** aparecen en cada card: verdes (con descuento) o grises (sin descuento)
+
+### Lista de compras
+
+- Tocá el icono de favorito en una card para guardarla en local.
+- Abrí **Lista** para ver tus favoritos guardados.
+- Desde ahí podés editar el nombre, la marca o el texto guardado.
+- El texto escrito en el modal se guarda localmente para la próxima vez.
+- Usá el icono de basura para borrar un favorito con confirmación.
 
 ## Modo Debug
 

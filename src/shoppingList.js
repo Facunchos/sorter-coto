@@ -109,22 +109,81 @@ window.CotoSorter.shoppingList = (function () {
     if (overlay) overlay.remove();
   }
 
-  function createFavoriteRow(item, checked) {
-    const row = document.createElement("label");
+  function createFavoriteRow(item, checked, onEdit, onDelete) {
+    const row = document.createElement("div");
     row.className = "coto-sorter-shopping-row";
+
+    const checkboxWrap = document.createElement("label");
+    checkboxWrap.className = "coto-sorter-shopping-row-check";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = checked;
     checkbox.dataset.favoriteId = item.id;
 
-    const text = document.createElement("span");
-    text.className = "coto-sorter-shopping-row-text";
-    text.textContent = `${item.name} — ${item.brand}`;
+    checkboxWrap.appendChild(checkbox);
 
-    row.appendChild(checkbox);
-    row.appendChild(text);
+    const body = document.createElement("div");
+    body.className = "coto-sorter-shopping-row-body";
+
+    const text = document.createElement("div");
+    text.className = "coto-sorter-shopping-row-text";
+    text.textContent = item.name;
+
+    const note = document.createElement("div");
+    note.className = "coto-sorter-shopping-row-note";
+    note.textContent = item.writtenText && item.writtenText !== item.name ? item.writtenText : item.searchTerm || item.name;
+
+    body.appendChild(text);
+    body.appendChild(note);
+
+    const actions = document.createElement("div");
+    actions.className = "coto-sorter-shopping-row-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "coto-sorter-shopping-icon-btn";
+    editBtn.textContent = "✎";
+    editBtn.title = "Editar favorito";
+    editBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (onEdit) onEdit(item);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "coto-sorter-shopping-icon-btn coto-sorter-shopping-icon-danger";
+    deleteBtn.textContent = "🗑";
+    deleteBtn.title = "Eliminar favorito";
+    deleteBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (onDelete) onDelete(item);
+    });
+
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+
+    row.appendChild(checkboxWrap);
+    row.appendChild(body);
+    row.appendChild(actions);
     return row;
+  }
+
+  function parseFavoriteEditInput(raw, currentItem) {
+    const parts = String(raw || "")
+      .split("\n")
+      .map((part) => part.trim());
+
+    const nextName = parts[0] || currentItem.name;
+    if (!nextName) return null;
+
+    return {
+      name: nextName,
+      searchTerm: parts[1] || currentItem.searchTerm || nextName,
+      writtenText: parts[1] || currentItem.writtenText || parts[0] || nextName,
+    };
   }
 
   async function openSelectedItems(selectedFavorites, manualTerms) {
@@ -246,19 +305,73 @@ window.CotoSorter.shoppingList = (function () {
 
     document.body.appendChild(overlay);
 
-    const storedFavorites = await favorites.getFavorites();
-    favoritesList.textContent = "";
+    manualInput.value = await favorites.getDraftText();
+    manualInput.addEventListener("input", () => {
+      favorites.saveDraftText(manualInput.value);
+    });
 
-    if (storedFavorites.length === 0) {
-      const emptyState = document.createElement("div");
-      emptyState.className = "coto-sorter-shopping-empty";
-      emptyState.textContent = "No hay favoritos guardados todavía.";
-      favoritesList.appendChild(emptyState);
-    } else {
-      for (const item of storedFavorites) {
-        favoritesList.appendChild(createFavoriteRow(item, true));
+    let favoritesState = await favorites.getFavorites();
+
+    async function refreshFavoritesList() {
+      favoritesState = await favorites.getFavorites();
+      favoritesList.textContent = "";
+
+      if (favoritesState.length === 0) {
+        const emptyState = document.createElement("div");
+        emptyState.className = "coto-sorter-shopping-empty";
+        emptyState.textContent = "No hay favoritos guardados todavía.";
+        favoritesList.appendChild(emptyState);
+        return;
+      }
+
+      for (const item of favoritesState) {
+        const row = createFavoriteRow(
+          item,
+          true,
+          async (currentItem) => {
+            const currentText = [currentItem.name, currentItem.writtenText || currentItem.searchTerm || currentItem.name]
+              .filter(Boolean)
+              .join("\n");
+
+            const raw = window.prompt(
+              "Editar favorito: primera línea = nombre, segunda línea = texto guardado/búsqueda",
+              currentText
+            );
+
+            if (raw === null) return;
+
+            const patch = parseFavoriteEditInput(raw, currentItem);
+            if (!patch || !patch.name) {
+              alert("El nombre no puede estar vacío.");
+              return;
+            }
+
+            const result = await favorites.updateFavorite(currentItem.id, patch);
+            if (!result.saved) {
+              alert("No se pudo actualizar el favorito.");
+              return;
+            }
+
+            await refreshFavoritesList();
+          },
+          async (currentItem) => {
+            const confirmed = window.confirm(`Eliminar el favorito \"${currentItem.name}\"?`);
+            if (!confirmed) return;
+
+            const removed = await favorites.removeFavorite(currentItem.id);
+            if (!removed) {
+              alert("No se pudo eliminar el favorito.");
+              return;
+            }
+
+            await refreshFavoritesList();
+          }
+        );
+        favoritesList.appendChild(row);
       }
     }
+
+    await refreshFavoritesList();
 
     selectAllBtn.addEventListener("click", () => {
       favoritesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
@@ -266,11 +379,11 @@ window.CotoSorter.shoppingList = (function () {
       });
     });
 
-    openBtn.addEventListener("click", () => {
+    openBtn.addEventListener("click", async () => {
       const selectedFavorites = [];
       favoritesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
         if (!checkbox.checked) return;
-        const favorite = storedFavorites.find((item) => item.id === checkbox.dataset.favoriteId);
+        const favorite = favoritesState.find((item) => item.id === checkbox.dataset.favoriteId);
         if (favorite) selectedFavorites.push(favorite);
       });
 
@@ -279,6 +392,7 @@ window.CotoSorter.shoppingList = (function () {
         .map((line) => line.trim())
         .filter(Boolean);
 
+      await favorites.saveDraftText(manualInput.value);
       openSelectedItems(selectedFavorites, manualTerms);
     });
   }

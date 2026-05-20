@@ -7,12 +7,15 @@ window.CotoSorter.favorites = (function () {
   const { normalizeAccents } = window.CotoSorter.utils;
 
   const STORAGE_KEY = "cotoSorterFavoritesV1";
+  const DRAFT_TEXT_KEY = "cotoSorterShoppingDraftV1";
+  let favoritesCache = [];
+  let draftCache = "";
 
   function getStorageArea() {
     return chrome && chrome.storage && chrome.storage.local ? chrome.storage.local : null;
   }
 
-  function readStorage(defaultValue) {
+  function readStorageKey(key, defaultValue) {
     return new Promise((resolve) => {
       const area = getStorageArea();
       if (!area) {
@@ -20,15 +23,20 @@ window.CotoSorter.favorites = (function () {
         return;
       }
 
-      area.get({ [STORAGE_KEY]: defaultValue }, (result) => {
-        resolve(result && Object.prototype.hasOwnProperty.call(result, STORAGE_KEY)
-          ? result[STORAGE_KEY]
+      area.get({ [key]: defaultValue }, (result) => {
+        if (chrome?.runtime?.lastError) {
+          resolve(defaultValue);
+          return;
+        }
+
+        resolve(result && Object.prototype.hasOwnProperty.call(result, key)
+          ? result[key]
           : defaultValue);
       });
     });
   }
 
-  function writeStorage(value) {
+  function writeStorageKey(key, value) {
     return new Promise((resolve) => {
       const area = getStorageArea();
       if (!area) {
@@ -36,7 +44,14 @@ window.CotoSorter.favorites = (function () {
         return;
       }
 
-      area.set({ [STORAGE_KEY]: value }, () => resolve());
+      area.set({ [key]: value }, () => {
+        if (chrome?.runtime?.lastError) {
+          resolve();
+          return;
+        }
+
+        resolve();
+      });
     });
   }
 
@@ -50,37 +65,45 @@ window.CotoSorter.favorites = (function () {
 
   function buildFavoriteId(data) {
     const name = toSlug(data?.name || data?.searchTerm || "");
-    const brand = toSlug(data?.brand || "");
-    const href = toSlug(data?.href || "");
-    return [name, brand, href].filter(Boolean).join("__") || toSlug(String(Date.now()));
+    const note = toSlug(data?.writtenText || data?.searchTerm || "");
+    return [name, note].filter(Boolean).join("__") || toSlug(String(Date.now()));
   }
 
   function normalizeFavorite(data) {
     const name = String(data?.name || data?.searchTerm || "").trim();
-    const brand = String(data?.brand || "").trim() || "Sin marca";
-    const href = String(data?.href || "").trim();
-    const imgSrc = String(data?.imgSrc || "").trim();
+    const note = String(data?.writtenText || data?.searchTerm || "").trim();
 
     if (!name) return null;
 
     return {
       id: String(data?.id || buildFavoriteId(data)),
       name,
-      brand,
-      href,
-      imgSrc,
-      searchTerm: String(data?.searchTerm || name).trim(),
+      searchTerm: String(data?.searchTerm || note || name).trim(),
+      writtenText: note,
       createdAt: Number(data?.createdAt) || Date.now(),
     };
   }
 
   async function getFavorites() {
-    const stored = await readStorage([]);
-    return Array.isArray(stored) ? stored : [];
+    const stored = await readStorageKey(STORAGE_KEY, favoritesCache);
+    favoritesCache = Array.isArray(stored) ? stored : [];
+    return favoritesCache;
   }
 
   async function saveFavorites(favorites) {
-    await writeStorage(Array.isArray(favorites) ? favorites : []);
+    favoritesCache = Array.isArray(favorites) ? favorites : [];
+    await writeStorageKey(STORAGE_KEY, favoritesCache);
+  }
+
+  async function getDraftText() {
+    const stored = await readStorageKey(DRAFT_TEXT_KEY, draftCache);
+    draftCache = typeof stored === "string" ? stored : "";
+    return draftCache;
+  }
+
+  async function saveDraftText(text) {
+    draftCache = String(text || "");
+    await writeStorageKey(DRAFT_TEXT_KEY, draftCache);
   }
 
   async function getFavoriteById(id) {
@@ -114,6 +137,28 @@ window.CotoSorter.favorites = (function () {
     return true;
   }
 
+  async function updateFavorite(id, patch) {
+    if (!id) return { saved: false, favorite: null };
+
+    const favorites = await getFavorites();
+    const index = favorites.findIndex((item) => item.id === id);
+    if (index === -1) return { saved: false, favorite: null };
+
+    const current = favorites[index];
+    const nextFavorite = normalizeFavorite({
+      ...current,
+      ...patch,
+      id: current.id,
+      createdAt: current.createdAt,
+    });
+
+    if (!nextFavorite) return { saved: false, favorite: null };
+
+    favorites[index] = nextFavorite;
+    await saveFavorites(favorites);
+    return { saved: true, favorite: nextFavorite };
+  }
+
   async function toggleFavorite(data) {
     const favorite = normalizeFavorite(data);
     if (!favorite) return { saved: false, favorite: null };
@@ -132,13 +177,17 @@ window.CotoSorter.favorites = (function () {
 
   return {
     STORAGE_KEY,
+    DRAFT_TEXT_KEY,
     buildFavoriteId,
     normalizeFavorite,
     getFavorites,
+    getDraftText,
+    saveDraftText,
     getFavoriteById,
     isFavorite,
     upsertFavorite,
     removeFavorite,
+    updateFavorite,
     toggleFavorite,
   };
 })();

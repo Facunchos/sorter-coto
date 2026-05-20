@@ -471,14 +471,70 @@
   cursor: pointer;
 }
 
-.coto-sorter-shopping-row input {
+.coto-sorter-shopping-row-check {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
   margin-top: 3px;
+}
+
+.coto-sorter-shopping-row-check input {
+  margin: 0;
+}
+
+.coto-sorter-shopping-row-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
 }
 
 .coto-sorter-shopping-row-text {
   font-size: 13px;
   color: #3d302b;
   line-height: 1.35;
+}
+
+.coto-sorter-shopping-row-note {
+  font-size: 12px;
+  color: #7f6d65;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.coto-sorter-shopping-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.coto-sorter-shopping-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid #d7b4a6;
+  background: #fff;
+  color: #6a564e;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: transform 150ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.coto-sorter-shopping-icon-btn:hover {
+  transform: translateY(-1px);
+  background: #fff6f2;
+  color: #c84f3d;
+  border-color: #d89b87;
+}
+
+.coto-sorter-shopping-icon-danger:hover {
+  background: #fff0f0;
+  color: #b94343;
+  border-color: #d98989;
 }
 
 .coto-sorter-shopping-empty {
