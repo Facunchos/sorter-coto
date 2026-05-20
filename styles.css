@@ -423,10 +423,71 @@
   line-height: 1.4;
 }
 
+.coto-sorter-shopping-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coto-sorter-shopping-tab-btn {
+  border: 1px solid #e4cfc7;
+  border-radius: 12px;
+  background: #fff7f3;
+  color: #7a5f55;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.coto-sorter-shopping-tab-btn:hover {
+  transform: translateY(-1px);
+  background: #fff0ea;
+  border-color: #d8a18f;
+}
+
+.coto-sorter-shopping-tab-btn.is-active {
+  background: #e20025;
+  border-color: #e20025;
+  color: #fff;
+}
+
+.coto-sorter-shopping-panels {
+  display: grid;
+  gap: 12px;
+}
+
+.coto-sorter-shopping-tab-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.coto-sorter-shopping-section {
+  display: grid;
+  gap: 8px;
+}
+
 .coto-sorter-shopping-label {
   font-size: 12px;
   font-weight: 700;
   color: #5b4a43;
+}
+
+.coto-sorter-shopping-name-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e4cfc7;
+  background: #fff;
+  color: #2e2622;
+  font-size: 13px;
+}
+
+.coto-sorter-shopping-name-input:focus {
+  outline: none;
+  border-color: #d75d48;
+  box-shadow: 0 0 0 3px rgba(215, 93, 72, 0.15);
 }
 
 .coto-sorter-shopping-textarea {
@@ -448,6 +509,51 @@
 }
 
 .coto-sorter-shopping-favorites {
+  display: grid;
+  gap: 8px;
+}
+
+.coto-sorter-shopping-manual-status {
+  min-height: 16px;
+  color: #8a6d62;
+  font-size: 12px;
+}
+
+.coto-sorter-shopping-manual-actions {
+  justify-content: flex-start;
+}
+
+.coto-sorter-shopping-collapse-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #e4cfc7;
+  border-radius: 12px;
+  background: #fff7f3;
+  color: #5b4a43;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.coto-sorter-shopping-collapse-btn:hover {
+  background: #fff0ea;
+  border-color: #d8a18f;
+}
+
+.coto-sorter-shopping-collapse-btn.is-collapsed {
+  background: #fff;
+}
+
+.coto-sorter-shopping-caret {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.coto-sorter-shopping-collapsible-body {
   display: grid;
   gap: 8px;
 }
@@ -507,6 +613,48 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.coto-sorter-shopping-manual-list {
+  max-height: 220px;
+}
+
+.coto-sorter-shopping-manual-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #efd8cd;
+  border-radius: 12px;
+  background: #fff;
+  color: #3d302b;
+  cursor: pointer;
+  text-align: left;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.coto-sorter-shopping-manual-item:hover {
+  transform: translateY(-1px);
+  background: #fff6f2;
+  border-color: #d8a18f;
+}
+
+.coto-sorter-shopping-manual-item.is-active {
+  border-color: #e20025;
+  box-shadow: 0 0 0 1px rgba(226, 0, 37, 0.12);
+}
+
+.coto-sorter-shopping-manual-item-text {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.coto-sorter-shopping-manual-item-meta {
+  flex-shrink: 0;
+  color: #8b7369;
+  font-size: 12px;
 }
 
 .coto-sorter-shopping-icon-btn {

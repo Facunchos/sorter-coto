@@ -8,8 +8,12 @@ window.CotoSorter.favorites = (function () {
 
   const STORAGE_KEY = "cotoSorterFavoritesV1";
   const DRAFT_TEXT_KEY = "cotoSorterShoppingDraftV1";
+  const DRAFT_NAME_KEY = "cotoSorterShoppingDraftNameV1";
+  const MANUAL_LISTS_KEY = "cotoSorterManualListsV1";
   let favoritesCache = [];
   let draftCache = "";
+  let draftNameCache = "";
+  let manualListsCache = [];
 
   function getStorageArea() {
     return chrome && chrome.storage && chrome.storage.local ? chrome.storage.local : null;
@@ -69,6 +73,11 @@ window.CotoSorter.favorites = (function () {
     return [name, note].filter(Boolean).join("__") || toSlug(String(Date.now()));
   }
 
+  function buildManualListId(data) {
+    const name = toSlug(data?.name || "lista");
+    return `${name || "lista"}__${Date.now().toString(36)}`;
+  }
+
   function normalizeFavorite(data) {
     const name = String(data?.name || data?.searchTerm || "").trim();
     const note = String(data?.writtenText || data?.searchTerm || "").trim();
@@ -81,6 +90,21 @@ window.CotoSorter.favorites = (function () {
       searchTerm: String(data?.searchTerm || note || name).trim(),
       writtenText: note,
       createdAt: Number(data?.createdAt) || Date.now(),
+    };
+  }
+
+  function normalizeManualList(data) {
+    const name = String(data?.name || data?.title || "").trim();
+    const text = String(data?.text || data?.items || "").trim();
+
+    if (!name) return null;
+
+    return {
+      id: String(data?.id || buildManualListId(data)),
+      name,
+      text,
+      createdAt: Number(data?.createdAt) || Date.now(),
+      updatedAt: Number(data?.updatedAt) || Number(data?.createdAt) || Date.now(),
     };
   }
 
@@ -104,6 +128,83 @@ window.CotoSorter.favorites = (function () {
   async function saveDraftText(text) {
     draftCache = String(text || "");
     await writeStorageKey(DRAFT_TEXT_KEY, draftCache);
+  }
+
+  async function getDraftManualListName() {
+    const stored = await readStorageKey(DRAFT_NAME_KEY, draftNameCache);
+    draftNameCache = typeof stored === "string" ? stored : "";
+    return draftNameCache;
+  }
+
+  async function saveDraftManualListName(text) {
+    draftNameCache = String(text || "");
+    await writeStorageKey(DRAFT_NAME_KEY, draftNameCache);
+  }
+
+  async function getManualLists() {
+    const stored = await readStorageKey(MANUAL_LISTS_KEY, manualListsCache);
+    manualListsCache = Array.isArray(stored) ? stored : [];
+    return manualListsCache;
+  }
+
+  async function saveManualLists(manualLists) {
+    manualListsCache = Array.isArray(manualLists) ? manualLists : [];
+    await writeStorageKey(MANUAL_LISTS_KEY, manualListsCache);
+  }
+
+  async function getManualListById(id) {
+    if (!id) return null;
+    const manualLists = await getManualLists();
+    return manualLists.find((item) => item.id === id) || null;
+  }
+
+  async function saveManualList(data) {
+    const manualList = normalizeManualList(data);
+    if (!manualList) return { saved: false, manualList: null };
+
+    const manualLists = await getManualLists();
+    const index = manualLists.findIndex((item) => item.id === manualList.id);
+
+    if (index === -1) {
+      manualLists.unshift(manualList);
+    } else {
+      manualLists[index] = manualList;
+    }
+
+    await saveManualLists(manualLists);
+    return { saved: true, manualList };
+  }
+
+  async function updateManualList(id, patch) {
+    if (!id) return { saved: false, manualList: null };
+
+    const manualLists = await getManualLists();
+    const index = manualLists.findIndex((item) => item.id === id);
+    if (index === -1) return { saved: false, manualList: null };
+
+    const current = manualLists[index];
+    const nextManualList = normalizeManualList({
+      ...current,
+      ...patch,
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt: Date.now(),
+    });
+
+    if (!nextManualList) return { saved: false, manualList: null };
+
+    manualLists[index] = nextManualList;
+    await saveManualLists(manualLists);
+    return { saved: true, manualList: nextManualList };
+  }
+
+  async function removeManualList(id) {
+    if (!id) return false;
+    const manualLists = await getManualLists();
+    const next = manualLists.filter((item) => item.id !== id);
+    if (next.length === manualLists.length) return false;
+    await saveManualLists(next);
+    return true;
   }
 
   async function getFavoriteById(id) {
@@ -178,14 +279,26 @@ window.CotoSorter.favorites = (function () {
   return {
     STORAGE_KEY,
     DRAFT_TEXT_KEY,
+    DRAFT_NAME_KEY,
+    MANUAL_LISTS_KEY,
     buildFavoriteId,
+    buildManualListId,
     normalizeFavorite,
+    normalizeManualList,
     getFavorites,
     getDraftText,
     saveDraftText,
+    getDraftManualListName,
+    saveDraftManualListName,
+    getManualLists,
+    saveManualLists,
     getFavoriteById,
+    getManualListById,
     isFavorite,
     upsertFavorite,
+    saveManualList,
+    updateManualList,
+    removeManualList,
     removeFavorite,
     updateFavorite,
     toggleFavorite,

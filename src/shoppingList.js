@@ -24,6 +24,13 @@ window.CotoSorter.shoppingList = (function () {
     return String(value || "").trim();
   }
 
+  function parseListLines(value) {
+    return String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
   function buildSearchUrl(term) {
     const slug = toSlug(term);
     if (!slug) return null;
@@ -171,6 +178,29 @@ window.CotoSorter.shoppingList = (function () {
     return row;
   }
 
+  function createManualListRow(item, isActive, onSelect) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "coto-sorter-shopping-manual-item";
+    if (isActive) row.classList.add("is-active");
+
+    const text = document.createElement("div");
+    text.className = "coto-sorter-shopping-manual-item-text";
+    text.textContent = item.name;
+
+    const meta = document.createElement("div");
+    meta.className = "coto-sorter-shopping-manual-item-meta";
+    meta.textContent = `${parseListLines(item.text).length} ítems`;
+
+    row.appendChild(text);
+    row.appendChild(meta);
+    row.addEventListener("click", () => {
+      if (onSelect) onSelect(item);
+    });
+
+    return row;
+  }
+
   function parseFavoriteEditInput(raw, currentItem) {
     const parts = String(raw || "")
       .split("\n")
@@ -242,7 +272,7 @@ window.CotoSorter.shoppingList = (function () {
 
     const subtitle = document.createElement("div");
     subtitle.className = "coto-sorter-shopping-subtitle";
-    subtitle.textContent = "Guardá favoritos desde las cards y abrilos como búsquedas separadas.";
+    subtitle.textContent = "Guardá listas manuales, editálas desde el nombre o abrí favoritos guardados como búsquedas separadas.";
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "coto-sorter-btn coto-sorter-shopping-close";
@@ -254,31 +284,124 @@ window.CotoSorter.shoppingList = (function () {
     header.appendChild(subtitle);
     header.appendChild(closeBtn);
 
+    const tabs = document.createElement("div");
+    tabs.className = "coto-sorter-shopping-tabs";
+
+    const manualTabBtn = document.createElement("button");
+    manualTabBtn.type = "button";
+    manualTabBtn.className = "coto-sorter-shopping-tab-btn is-active";
+    manualTabBtn.textContent = "Listas Manuales";
+
+    const favoritesTabBtn = document.createElement("button");
+    favoritesTabBtn.type = "button";
+    favoritesTabBtn.className = "coto-sorter-shopping-tab-btn";
+    favoritesTabBtn.textContent = "Favoritos Guardados";
+
+    tabs.appendChild(manualTabBtn);
+    tabs.appendChild(favoritesTabBtn);
+
+    const panels = document.createElement("div");
+    panels.className = "coto-sorter-shopping-panels";
+
+    const manualPanel = document.createElement("section");
+    manualPanel.className = "coto-sorter-shopping-tab-panel";
+
+    const favoritesPanel = document.createElement("section");
+    favoritesPanel.className = "coto-sorter-shopping-tab-panel";
+    favoritesPanel.hidden = true;
+
+    const manualTop = document.createElement("div");
+    manualTop.className = "coto-sorter-shopping-section";
+
     const manualLabel = document.createElement("label");
     manualLabel.className = "coto-sorter-shopping-label";
-    manualLabel.textContent = "Ítems manuales (uno por línea)";
+    manualLabel.textContent = "Nombre de la lista";
+
+    const manualNameInput = document.createElement("input");
+    manualNameInput.className = "coto-sorter-shopping-name-input";
+    manualNameInput.type = "text";
+    manualNameInput.placeholder = "Ej: Feria del finde";
+
+    const manualItemsLabel = document.createElement("label");
+    manualItemsLabel.className = "coto-sorter-shopping-label";
+    manualItemsLabel.textContent = "Ítems manuales (uno por línea)";
 
     const manualInput = document.createElement("textarea");
     manualInput.className = "coto-sorter-shopping-textarea";
-    manualInput.rows = 5;
+    manualInput.rows = 6;
     manualInput.placeholder = "Leche\nHarina 0000\nManteca 200g";
 
-    const favoritesWrap = document.createElement("div");
-    favoritesWrap.className = "coto-sorter-shopping-favorites";
+    const manualStatus = document.createElement("div");
+    manualStatus.className = "coto-sorter-shopping-manual-status";
 
-    const favoritesTitle = document.createElement("div");
-    favoritesTitle.className = "coto-sorter-shopping-label";
-    favoritesTitle.textContent = "Favoritos guardados";
+    const manualActions = document.createElement("div");
+    manualActions.className = "coto-sorter-shopping-actions coto-sorter-shopping-manual-actions";
+
+    const saveManualBtn = document.createElement("button");
+    saveManualBtn.className = "coto-sorter-btn coto-sorter-shopping-primary";
+    saveManualBtn.type = "button";
+    saveManualBtn.textContent = "Guardar lista";
+
+    const newManualBtn = document.createElement("button");
+    newManualBtn.className = "coto-sorter-btn coto-sorter-shopping-secondary";
+    newManualBtn.type = "button";
+    newManualBtn.textContent = "Nueva lista";
+
+    manualActions.appendChild(saveManualBtn);
+    manualActions.appendChild(newManualBtn);
+
+    const manualListsWrap = document.createElement("div");
+    manualListsWrap.className = "coto-sorter-shopping-favorites";
+
+    const manualListsTitle = document.createElement("div");
+    manualListsTitle.className = "coto-sorter-shopping-label";
+    manualListsTitle.textContent = "Items guardados";
+
+    const manualListsList = document.createElement("div");
+    manualListsList.className = "coto-sorter-shopping-list coto-sorter-shopping-manual-list";
+    manualListsList.textContent = "Cargando listas manuales...";
+
+    manualListsWrap.appendChild(manualListsTitle);
+    manualListsWrap.appendChild(manualListsList);
+
+    manualTop.appendChild(manualLabel);
+    manualTop.appendChild(manualNameInput);
+    manualTop.appendChild(manualItemsLabel);
+    manualTop.appendChild(manualInput);
+    manualTop.appendChild(manualStatus);
+    manualTop.appendChild(manualActions);
+    manualTop.appendChild(manualListsWrap);
+
+    const favoritesTop = document.createElement("div");
+    favoritesTop.className = "coto-sorter-shopping-section";
+
+    const favoritesCollapseBtn = document.createElement("button");
+    favoritesCollapseBtn.type = "button";
+    favoritesCollapseBtn.className = "coto-sorter-shopping-collapse-btn";
+
+    const favoritesCollapseText = document.createElement("span");
+    favoritesCollapseText.textContent = "Favoritos Guardados";
+
+    const favoritesCollapseCaret = document.createElement("span");
+    favoritesCollapseCaret.className = "coto-sorter-shopping-caret";
+    favoritesCollapseCaret.textContent = "▾";
+
+    favoritesCollapseBtn.appendChild(favoritesCollapseText);
+    favoritesCollapseBtn.appendChild(favoritesCollapseCaret);
+
+    const favoritesBody = document.createElement("div");
+    favoritesBody.className = "coto-sorter-shopping-collapsible-body";
 
     const favoritesList = document.createElement("div");
     favoritesList.className = "coto-sorter-shopping-list";
     favoritesList.textContent = "Cargando favoritos...";
 
-    favoritesWrap.appendChild(favoritesTitle);
-    favoritesWrap.appendChild(favoritesList);
+    favoritesBody.appendChild(favoritesList);
+    favoritesTop.appendChild(favoritesCollapseBtn);
+    favoritesTop.appendChild(favoritesBody);
 
-    const actions = document.createElement("div");
-    actions.className = "coto-sorter-shopping-actions";
+    const footerActions = document.createElement("div");
+    footerActions.className = "coto-sorter-shopping-actions";
 
     const openBtn = document.createElement("button");
     openBtn.className = "coto-sorter-btn coto-sorter-shopping-primary";
@@ -290,27 +413,78 @@ window.CotoSorter.shoppingList = (function () {
     selectAllBtn.type = "button";
     selectAllBtn.textContent = "Seleccionar todo";
 
-    actions.appendChild(openBtn);
-    actions.appendChild(selectAllBtn);
+    footerActions.appendChild(openBtn);
+    footerActions.appendChild(selectAllBtn);
+
+    manualPanel.appendChild(manualTop);
+    favoritesPanel.appendChild(favoritesTop);
+    panels.appendChild(manualPanel);
+    panels.appendChild(favoritesPanel);
 
     modal.appendChild(header);
-    modal.appendChild(manualLabel);
-    modal.appendChild(manualInput);
-    modal.appendChild(favoritesWrap);
-    modal.appendChild(actions);
+    modal.appendChild(tabs);
+    modal.appendChild(panels);
+    modal.appendChild(footerActions);
     overlay.appendChild(modal);
+
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) closeModal();
     });
 
     document.body.appendChild(overlay);
 
-    manualInput.value = await favorites.getDraftText();
-    manualInput.addEventListener("input", () => {
-      favorites.saveDraftText(manualInput.value);
-    });
+    let favoritesState = [];
+    let manualListsState = [];
+    let selectedManualList = null;
+    let activeTab = "manual";
+    let favoritesExpanded = true;
 
-    let favoritesState = await favorites.getFavorites();
+    function setActiveTab(tab) {
+      activeTab = tab;
+      manualTabBtn.classList.toggle("is-active", tab === "manual");
+      favoritesTabBtn.classList.toggle("is-active", tab === "favorites");
+      manualPanel.hidden = tab !== "manual";
+      favoritesPanel.hidden = tab !== "favorites";
+    }
+
+    function setFavoritesExpanded(expanded) {
+      favoritesExpanded = expanded;
+      favoritesBody.hidden = !expanded;
+      favoritesCollapseBtn.classList.toggle("is-collapsed", !expanded);
+      favoritesCollapseCaret.textContent = expanded ? "▾" : "▸";
+    }
+
+    function syncManualDrafts() {
+      favorites.saveDraftManualListName(manualNameInput.value);
+      favorites.saveDraftText(manualInput.value);
+    }
+
+    async function refreshManualListsList() {
+      manualListsState = await favorites.getManualLists();
+      manualListsList.textContent = "";
+
+      if (manualListsState.length === 0) {
+        const emptyState = document.createElement("div");
+        emptyState.className = "coto-sorter-shopping-empty";
+        emptyState.textContent = "Todavía no guardaste listas manuales.";
+        manualListsList.appendChild(emptyState);
+        return;
+      }
+
+      for (const item of manualListsState) {
+        const row = createManualListRow(item, selectedManualList?.id === item.id, async (currentItem) => {
+          selectedManualList = currentItem;
+          manualNameInput.value = currentItem.name;
+          manualInput.value = currentItem.text;
+          manualStatus.textContent = `Editando: ${currentItem.name}`;
+          await favorites.saveDraftManualListName(manualNameInput.value);
+          await favorites.saveDraftText(manualInput.value);
+          await refreshManualListsList();
+          setActiveTab("manual");
+        });
+        manualListsList.appendChild(row);
+      }
+    }
 
     async function refreshFavoritesList() {
       favoritesState = await favorites.getFavorites();
@@ -371,7 +545,87 @@ window.CotoSorter.shoppingList = (function () {
       }
     }
 
-    await refreshFavoritesList();
+    async function saveCurrentManualList() {
+      const currentName = normalizeSearchTerm(manualNameInput.value);
+      const currentText = String(manualInput.value || "").trim();
+      const listLines = parseListLines(currentText);
+
+      if (!currentName) {
+        alert("Poné un nombre para la lista.");
+        return;
+      }
+
+      if (listLines.length === 0) {
+        alert("La lista necesita al menos un ítem.");
+        return;
+      }
+
+      syncManualDrafts();
+
+      let result = null;
+      if (selectedManualList && currentName === selectedManualList.name) {
+        result = await favorites.updateManualList(selectedManualList.id, {
+          name: currentName,
+          text: currentText,
+        });
+      } else {
+        result = await favorites.saveManualList({
+          name: currentName,
+          text: currentText,
+        });
+      }
+
+      if (!result || !result.saved) {
+        alert("No se pudo guardar la lista.");
+        return;
+      }
+
+      selectedManualList = result.manualList;
+      manualNameInput.value = result.manualList.name;
+      manualInput.value = result.manualList.text;
+      manualStatus.textContent = `Guardada: ${result.manualList.name}`;
+      await favorites.saveDraftManualListName(manualNameInput.value);
+      await favorites.saveDraftText(manualInput.value);
+      await refreshManualListsList();
+    }
+
+    manualNameInput.addEventListener("input", () => {
+      syncManualDrafts();
+      if (selectedManualList && normalizeSearchTerm(manualNameInput.value) !== selectedManualList.name) {
+        manualStatus.textContent = `Editando: ${selectedManualList.name}`;
+      } else if (selectedManualList) {
+        manualStatus.textContent = `Editando: ${selectedManualList.name}`;
+      } else {
+        manualStatus.textContent = "";
+      }
+    });
+
+    manualInput.addEventListener("input", () => {
+      syncManualDrafts();
+      if (selectedManualList) {
+        manualStatus.textContent = `Editando: ${selectedManualList.name}`;
+      }
+    });
+
+    saveManualBtn.addEventListener("click", saveCurrentManualList);
+
+    newManualBtn.addEventListener("click", async () => {
+      selectedManualList = null;
+      manualNameInput.value = "";
+      manualInput.value = "";
+      manualStatus.textContent = "Nueva lista";
+      await favorites.saveDraftManualListName("");
+      await favorites.saveDraftText("");
+      await refreshManualListsList();
+      manualNameInput.focus();
+    });
+
+    favoritesCollapseBtn.addEventListener("click", () => {
+      setFavoritesExpanded(!favoritesExpanded);
+    });
+
+    manualTabBtn.addEventListener("click", () => setActiveTab("manual"));
+    favoritesTabBtn.addEventListener("click", () => setActiveTab("favorites"));
 
     selectAllBtn.addEventListener("click", () => {
       favoritesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
@@ -387,14 +641,21 @@ window.CotoSorter.shoppingList = (function () {
         if (favorite) selectedFavorites.push(favorite);
       });
 
-      const manualTerms = manualInput.value
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const manualTerms = parseListLines(manualInput.value);
 
+      await favorites.saveDraftManualListName(manualNameInput.value);
       await favorites.saveDraftText(manualInput.value);
       openSelectedItems(selectedFavorites, manualTerms);
     });
+
+    manualNameInput.value = await favorites.getDraftManualListName();
+    manualInput.value = await favorites.getDraftText();
+    manualStatus.textContent = manualNameInput.value ? `Lista pendiente: ${manualNameInput.value}` : "";
+
+    await refreshManualListsList();
+    await refreshFavoritesList();
+    setActiveTab("manual");
+    setFavoritesExpanded(true);
   }
 
   async function toggleFavoriteFromCard(data) {
