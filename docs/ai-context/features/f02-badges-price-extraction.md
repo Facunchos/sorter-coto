@@ -40,6 +40,7 @@
 - MUST only treat `done` as terminal; `no-data` must be re-attempted later.
 - MUST keep adjusted-price formula aligned with Vista Ligera rule.
 - Fallback behavior: if no valid data, mark `no-data` and skip badge.
+- The full favorite snapshot payload is owned by `src/productService.js`; `extractProductData()` should stay limited to extracting and comparing card prices.
 
 ## Failure Modes
 - Symptom: discount badge wrong on promo cards.

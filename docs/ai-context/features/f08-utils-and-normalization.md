@@ -12,6 +12,11 @@
 - `normalizeUnitType`, `cFormatoToUnitType`, `detectUnitTypeFromProduct` in `src/utils.js`
 - `unitLabel`, `unitTypeSeparatorLabel` in `src/utils.js`
 
+## Shared Product Shape
+- `src/productService.js` now owns the canonical product/favorite snapshot helpers. Use it when code needs a normalized record with `brand`, `href`, `priceText`, `referencePrice`, `adjustedReferencePrice`, `discountRatio`, and the `lastSeen*` fields together.
+- `buildFavoritePriceMeta()` in `src/productService.js` centralizes the modal price summary computation so list views do not duplicate snapshot parsing.
+- `src/utils.js` still owns low-level helpers like `slugify`, `parsePrice`, and unit normalization.
+
 ## Inputs / Outputs
 - Inputs: raw text from DOM/API (`Precio por`, `cFormato`, money strings).
 - Outputs: normalized numbers and canonical unit keys.
@@ -48,3 +53,5 @@
 - If money parsing changes, review `features/f02-badges-price-extraction.md` and `features/f06-vista-ligera-rendering.md`.
 - Tests/manual checks: all unit types, decimal/thousand formats.
 - `NEEDS_CODE_CHECK`: yes
+
+- Prefer `productService.buildFavoriteSnapshot()` over assembling favorite payloads by hand.

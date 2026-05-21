@@ -1,0 +1,45 @@
+/* ==========================================================
+   Coto Sorter — Base styles and utilities
+   Contains keyframes and global responsive rules
+   ========================================================== */
+
+@keyframes coto-sorter-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Responsive: smaller screens ---- */
+@media (max-width: 768px) {
+  .coto-sorter-panel {
+    bottom: 10px;
+    right: 10px;
+    padding: 10px;
+    min-width: 160px;
+  }
+
+  .coto-sorter-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .coto-sorter-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+}
+
+@media (max-width: 900px) {
+  .coto-sorter-shopping-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .coto-sorter-shopping-list {
+    grid-template-columns: 1fr;
+  }
+
+  .coto-sorter-shopping-actions {
+    grid-template-columns: 1fr;
+  }
+}

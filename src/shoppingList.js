@@ -15,11 +15,7 @@ window.CotoSorter.shoppingList = (function () {
   const OVERLAY_CLASS = "coto-sorter-shopping-overlay";
 
   function toSlug(value) {
-    return normalizeAccents(String(value || ""))
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    return window.CotoSorter.utils.slugify(value);
   }
 
   function normalizeSearchTerm(value) {
@@ -44,81 +40,6 @@ window.CotoSorter.shoppingList = (function () {
     if (!url) return null;
     const batchId = encodeURIComponent(item.id || toSlug(item.searchTerm || item.name));
     return `${url}#${HASH_KEY}=${batchId}`;
-  }
-
-  function formatSnapshotDate(timestamp) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value) || value <= 0) return null;
-    return new Intl.DateTimeFormat("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "2-digit",
-    }).format(new Date(value));
-  }
-
-  function buildFavoritePriceMeta(item) {
-    const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
-    const parseMoneyLoose = window.CotoSorter?.priceUtils?.parseMoneyLoose || ((value) => Number(value));
-    const regularPrice = Number.isFinite(Number(item?.referencePrice))
-      ? Number(item.referencePrice)
-      : Number.isFinite(Number(item?.lastSeenRegularPrice))
-      ? Number(item.lastSeenRegularPrice)
-      : Number.isFinite(parseMoneyLoose(item?.priceText))
-      ? parseMoneyLoose(item.priceText)
-      : null;
-    const discountedPrice = Number.isFinite(Number(item?.promoPriceRaw))
-      ? Number(item.promoPriceRaw)
-      : Number.isFinite(parseMoneyLoose(item?.discountedPriceText))
-      ? parseMoneyLoose(item.discountedPriceText)
-      : Number.isFinite(Number(item?.lastSeenDisplayedPrice))
-      ? Number(item.lastSeenDisplayedPrice)
-      : null;
-    const discountRatio = Number.isFinite(Number(item?.discountRatio))
-      ? Number(item.discountRatio)
-      : Number.isFinite(Number(item?.lastSeenDiscountRatio))
-      ? Number(item.lastSeenDiscountRatio)
-      : null;
-    const actualPrice = Number.isFinite(Number(item?.activePrice))
-      ? Number(item.activePrice)
-      : Number.isFinite(Number(item?.lastSeenAdjustedUnitPrice))
-      ? Number(item.lastSeenAdjustedUnitPrice)
-      : discountedPrice ?? regularPrice;
-    const checkedAt = formatSnapshotDate(item?.lastCheckedAt);
-    const hasSnapshot = !!checkedAt || regularPrice !== null || discountedPrice !== null || actualPrice !== null;
-    const hasDiscount = Number.isFinite(discountRatio) && discountRatio > 0 && discountRatio < 0.999;
-    const discountPct = hasDiscount ? Math.max(1, Math.round((1 - discountRatio) * 100)) : 0;
-    const lastPriceValue = hasDiscount
-      ? (discountedPrice ?? actualPrice ?? regularPrice)
-      : (actualPrice ?? regularPrice ?? discountedPrice);
-    const todayPriceValue = actualPrice;
-    const lastPriceState = hasDiscount ? "price-discount" : "price-regular";
-    const todayPriceState = Number.isFinite(Number(item?.discountRatio)) && Number(item.discountRatio) < 0.999
-      ? "price-discount"
-      : "price-regular";
-
-    const tooltipLines = {
-      checkedAt: checkedAt || "Verificación Pending",
-      regularPrice: regularPrice !== null ? formatPrice(regularPrice) : "Verificación Pending",
-      discountText: hasDiscount ? `-${discountPct}%` : "Sin descuento",
-      discountedPrice: discountedPrice !== null ? formatPrice(discountedPrice) : "Verificación Pending",
-      actualPrice: actualPrice !== null ? formatPrice(actualPrice) : "Verificación Pending",
-    };
-
-    return {
-      hasSnapshot,
-      hasDiscount,
-      discountPct,
-      checkedAt,
-      regularPrice,
-      discountedPrice,
-      actualPrice,
-      lastPriceValue,
-      todayPriceValue,
-      lastPriceState,
-      todayPriceState,
-      tooltipLines,
-      visibleLabel: "Prices",
-    };
   }
 
   function getBatchItemIdFromLocation() {
@@ -160,70 +81,7 @@ window.CotoSorter.shoppingList = (function () {
     writeJsonStorage(BATCH_QUEUE_KEY, Array.isArray(queue) ? queue : []);
   }
 
-  function getBatchLock() {
-    return String(localStorage.getItem(BATCH_LOCK_KEY) || "");
-  }
-
-  function setBatchLock(itemId) {
-    try {
-      localStorage.setItem(BATCH_LOCK_KEY, String(itemId || ""));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function clearBatchLock(itemId) {
-    try {
-      const current = getBatchLock();
-      if (!current || !itemId || current === itemId) {
-        localStorage.removeItem(BATCH_LOCK_KEY);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function enqueueBatchItem(itemId) {
-    const queue = readBatchQueue();
-    if (!queue.includes(itemId)) {
-      queue.push(itemId);
-      writeBatchQueue(queue);
-    }
-  }
-
-  function dequeueBatchItem(itemId) {
-    const queue = readBatchQueue().filter((queuedId) => queuedId !== itemId);
-    writeBatchQueue(queue);
-  }
-
-  async function waitForBatchTurn(itemId, timeoutMs = 180000) {
-    enqueueBatchItem(itemId);
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < timeoutMs) {
-      const queue = readBatchQueue();
-      const lock = getBatchLock();
-
-      if (queue[0] === itemId && (!lock || lock === itemId)) {
-        setBatchLock(itemId);
-        return true;
-      }
-
-      if (!queue.includes(itemId)) {
-        enqueueBatchItem(itemId);
-      }
-
-      await wait(500);
-    }
-
-    dequeueBatchItem(itemId);
-    return false;
-  }
-
-  function releaseBatchTurn(itemId) {
-    dequeueBatchItem(itemId);
-    clearBatchLock(itemId);
-  }
+  // Batch queue/lock are centralized in tabRunner
 
   async function waitForProducts(maxWaitMs) {
     const limit = Math.max(1000, maxWaitMs || 12000);
@@ -257,7 +115,61 @@ window.CotoSorter.shoppingList = (function () {
       return true;
     }
 
-    const gotTurn = await waitForBatchTurn(itemId);
+    const runner = window.CotoSorter?.tabRunner;
+    let gotTurn = false;
+    if (runner && typeof runner.waitForBatchTurn === "function") {
+      gotTurn = await runner.waitForBatchTurn(itemId);
+    } else {
+      // Local fallback queue using localStorage
+      const BATCH_QUEUE_KEY = "cotoSorterBatchQueueV1";
+      const BATCH_LOCK_KEY = "cotoSorterBatchLockV1";
+
+      function readJsonStorage(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          const parsed = JSON.parse(raw);
+          return parsed == null ? fallback : parsed;
+        } catch {
+          return fallback;
+        }
+      }
+
+      function writeJsonStorage(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      function readBatchQueue() { const q = readJsonStorage(BATCH_QUEUE_KEY, []); return Array.isArray(q) ? q.filter(Boolean) : []; }
+      function writeBatchQueue(queue) { writeJsonStorage(BATCH_QUEUE_KEY, Array.isArray(queue) ? queue : []); }
+      function getBatchLock() { return String(localStorage.getItem(BATCH_LOCK_KEY) || ""); }
+      function setBatchLock(id) { try { localStorage.setItem(BATCH_LOCK_KEY, String(id || "")); } catch {} }
+      function dequeueBatchItem(id) { const next = readBatchQueue().filter((x) => x !== id); writeBatchQueue(next); }
+      function enqueueBatchItem(id) { const q = readBatchQueue(); if (!q.includes(id)) { q.push(id); writeBatchQueue(q); } }
+
+      enqueueBatchItem(itemId);
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < 180000) {
+        const queue = readBatchQueue();
+        const lock = getBatchLock();
+        if (queue[0] === itemId && (!lock || lock === itemId)) {
+          setBatchLock(itemId);
+          gotTurn = true;
+          break;
+        }
+        if (!queue.includes(itemId)) enqueueBatchItem(itemId);
+        await wait(500);
+      }
+
+      if (!gotTurn) {
+        dequeueBatchItem(itemId);
+      }
+
+    }
     if (!gotTurn) {
       debugLog("Batch tab timed out waiting for its queue turn", itemId);
       return true;
@@ -273,7 +185,11 @@ window.CotoSorter.shoppingList = (function () {
       debugLog("Batch tab launching Vista Ligera", itemId);
       await revistaModule.startRevistaHTMLGeneration(null, () => {});
     } finally {
-      releaseBatchTurn(itemId);
+      if (runner && typeof runner.releaseBatchTurn === "function") {
+        try { runner.releaseBatchTurn(itemId); } catch (e) { /* ignore */ }
+      } else {
+        try { releaseBatchTurn(itemId); } catch (e) { /* ignore */ }
+      }
       setTimeout(() => {
         try {
           if (!window.closed) {
@@ -317,7 +233,9 @@ window.CotoSorter.shoppingList = (function () {
     text.className = "coto-sorter-shopping-row-text";
     text.textContent = item.name;
 
-    const priceMeta = buildFavoritePriceMeta(item);
+    const priceMeta = window.CotoSorter?.productService?.buildFavoritePriceMeta
+      ? window.CotoSorter.productService.buildFavoritePriceMeta(item)
+      : null;
     const priceBlock = document.createElement("div");
     priceBlock.className = "coto-sorter-fav-price-block";
 
@@ -568,11 +486,23 @@ window.CotoSorter.shoppingList = (function () {
 
     closeModal();
 
-    for (const item of items) {
-      const targetUrl = buildBatchUrl(item);
-      if (!targetUrl) continue;
-      window.open(targetUrl, "_blank");
-      await wait(750);
+    try {
+      const tabs = items
+        .map((it) => ({ id: it.id, url: buildBatchUrl(it) }))
+        .filter((t) => t.url);
+
+      const runner = window.CotoSorter?.tabRunner;
+      if (runner && typeof runner.openBatchTabs === "function") {
+        await runner.openBatchTabs(tabs, { delayMs: 750 });
+      } else {
+        // fallback to original behavior
+        for (const t of tabs) {
+          window.open(t.url, "_blank");
+          await wait(750);
+        }
+      }
+    } catch (err) {
+      console.debug("openSelectedItems failed", err?.message || err);
     }
   }
 
@@ -606,78 +536,29 @@ window.CotoSorter.shoppingList = (function () {
         return products.find((product) => normalizeForMatch(product?.name).includes(favoriteName)) || null;
       }
 
-      function buildProductPatch(product) {
-        if (!product) return null;
-        return {
-          brand: product.brand || product.productBrand || product.brandName || null,
-          productBrand: product.productBrand || product.brand || null,
-          product_brand: product.product_brand || product.brand || null,
-          href: product.href || null,
-          imgSrc: product.imgSrc || null,
-          priceText: product.priceText || null,
-          discountedPriceText: product.discountedPriceText || null,
-          badges: Array.isArray(product.badges) ? product.badges : [],
-          unitPriceText: product.unitPriceText || null,
-          unitType: product.unitType || null,
-          activePrice: Number.isFinite(Number(product.activePrice)) ? Number(product.activePrice) : null,
-          referencePrice: Number.isFinite(Number(product.referencePrice)) ? Number(product.referencePrice) : null,
-          adjustedReferencePrice: Number.isFinite(Number(product.adjustedReferencePrice)) ? Number(product.adjustedReferencePrice) : null,
-          discountRatio: Number.isFinite(Number(product.discountRatio)) ? Number(product.discountRatio) : 1,
-          promoPriceRaw: Number.isFinite(Number(product.promoPriceRaw)) ? Number(product.promoPriceRaw) : null,
-          maxFormatPriceRaw: Number.isFinite(Number(product.maxFormatPriceRaw)) ? Number(product.maxFormatPriceRaw) : null,
-          promoTags: Array.isArray(product.promoTags) ? product.promoTags : [],
-          lastCheckedAt: Date.now(),
-        };
-      }
-
       for (const fav of toScan) {
         try {
           const term = normalizeSearchTerm(fav.searchTerm || fav.name);
           const url = buildSearchUrl(term);
           if (!url) continue;
-
           let patch = null;
-          const apiModule = window.CotoSorter?.api;
 
-          if (apiModule && typeof apiModule.scrapeProductsFromPageUrl === "function") {
-            const products = await apiModule.scrapeProductsFromPageUrl(url);
-            const matched = pickMatchingProduct(fav, products);
-            patch = buildProductPatch(matched);
-          }
-
-          if (!patch) {
-            // Fallback: fetch page and read the first visible card, keeping legacy behavior.
-            const resp = await fetch(url, { credentials: "same-origin" });
-            if (!resp || resp.status !== 200) continue;
-            const html = await resp.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, "text/html");
-
-            const productEl = doc.querySelector(".producto-card, [data-cnstrc-item-price], .card-container");
-            const badgeData = productEl && window.CotoSorter?.badges?.extractProductData
-              ? window.CotoSorter.badges.extractProductData(productEl)
-              : null;
-
-            if (badgeData) {
-              patch = {
-                priceText: Number.isFinite(Number(badgeData.regularPrice)) ? window.CotoSorter.utils.formatPrice(badgeData.regularPrice) : null,
-                discountedPriceText: badgeData.discountRatio < 0.999 && Number.isFinite(Number(badgeData.displayedPrice))
-                  ? window.CotoSorter.utils.formatPrice(badgeData.displayedPrice)
-                  : null,
-                activePrice: Number.isFinite(Number(badgeData.displayedPrice)) ? Number(badgeData.displayedPrice) : null,
-                referencePrice: Number.isFinite(Number(badgeData.regularPrice)) ? Number(badgeData.regularPrice) : null,
-                adjustedReferencePrice: Number.isFinite(Number(badgeData.adjustedUnitPrice)) ? Number(badgeData.adjustedUnitPrice) : null,
-                discountRatio: Number.isFinite(Number(badgeData.discountRatio)) ? Number(badgeData.discountRatio) : 1,
-                unitType: badgeData.unitType || null,
-                unitPriceText: badgeData.unitRawLabel ? `$/` + badgeData.unitRawLabel + `: ${window.CotoSorter.utils.formatPrice(badgeData.listedUnitPrice)}` : null,
-                lastSeenDisplayedPrice: badgeData.displayedPrice,
-                lastSeenRegularPrice: badgeData.regularPrice,
-                lastSeenAdjustedUnitPrice: badgeData.adjustedUnitPrice,
-                lastSeenDiscountRatio: badgeData.discountRatio,
-                lastCheckedAt: Date.now(),
-              };
+          const svc = window.CotoSorter?.productService;
+          let products = [];
+          if (svc && typeof svc.extractProductsFromPageUrl === "function") {
+            products = await svc.extractProductsFromPageUrl(url);
+          } else {
+            const apiModule = window.CotoSorter?.api;
+            if (apiModule && typeof apiModule.scrapeProductsFromPageUrl === "function") {
+              products = await apiModule.scrapeProductsFromPageUrl(url);
             }
           }
+
+          const matched = pickMatchingProduct(fav, products || []);
+          const svcPatch = window.CotoSorter?.productService?.buildFavoriteSnapshot;
+          patch = matched && typeof svcPatch === "function"
+            ? svcPatch(matched, { searchTerm: term, writtenText: fav.writtenText || term, lastCheckedAt: Date.now() })
+            : null;
 
           if (!patch) {
             patch = { lastCheckedAt: Date.now() };
@@ -758,7 +639,7 @@ window.CotoSorter.shoppingList = (function () {
     manualToggleBtn.className = "coto-sorter-shopping-collapse-btn";
 
     const manualToggleText = document.createElement("span");
-            // Deletion is handled by the row's two-click confirm UI.
+        manualToggleText.textContent = "Lista Manual";
     const manualToggleCaret = document.createElement("span");
     manualToggleCaret.className = "coto-sorter-shopping-caret";
     manualToggleCaret.textContent = "▾";

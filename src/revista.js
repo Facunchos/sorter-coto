@@ -85,6 +85,16 @@ window.CotoSorter.revista = (function () {
         updateProgressFn(label, pct);
       });
 
+      // Normalize via productService when available to keep a single source of truth
+      try {
+        const svc = window.CotoSorter?.productService;
+        if (svc && typeof svc.normalizeApiRecord === "function") {
+          allProducts = (allProducts || []).map((p) => svc.normalizeApiRecord(p) || p);
+        }
+      } catch (err) {
+        debugLog("revista: product normalization failed", err?.message || err);
+      }
+
       if (allProducts.length === 0) {
         updateProgressFn(null, 0);
         alert("No se encontraron productos en esta página.");
@@ -132,6 +142,16 @@ window.CotoSorter.revista = (function () {
           : "Obteniendo productos...";
         updateProgressFn(label, pct);
       });
+
+      // Normalize via productService when available
+      try {
+        const svc = window.CotoSorter?.productService;
+        if (svc && typeof svc.normalizeApiRecord === "function") {
+          allProducts = (allProducts || []).map((p) => svc.normalizeApiRecord(p) || p);
+        }
+      } catch (err) {
+        debugLog("revista: product normalization failed", err?.message || err);
+      }
 
       if (allProducts.length === 0) {
         updateProgressFn(null, 0);

@@ -1,0 +1,72 @@
+/* ==========================================================
+   Coto Sorter — Badges and product-level UI
+   ========================================================== */
+
+.coto-sorter-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  z-index: 10;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  line-height: 1.4;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+
+.coto-sorter-badge-discount {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #a3d9b1;
+}
+
+.coto-sorter-badge-regular {
+  background: #e9ecef;
+  color: #495057;
+  border: 1px solid #ced4da;
+}
+
+.producto-card {
+  position: relative;
+}
+
+.producto-card .card-container {
+  position: relative;
+}
+
+.coto-sorter-favorite-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 11;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid #d7b4a6;
+  background: rgba(255, 255, 255, 0.96);
+  color: #7b5a4f;
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(88, 55, 38, 0.15);
+  transition: transform 150ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.coto-sorter-favorite-btn:hover {
+  transform: translateY(-1px);
+  background: #fff6f2;
+  color: #d24f3d;
+  border-color: #d8a18f;
+}
+
+.coto-sorter-favorite-btn.is-saved {
+  background: #1f9866;
+  color: #fff;
+  border-color: #1f9866;
+}

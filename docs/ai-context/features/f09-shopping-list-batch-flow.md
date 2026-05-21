@@ -22,6 +22,12 @@
 - Uses browser extension storage for favorite persistence.
 - Reuses existing search helpers and Vista Ligera generation entry points.
 - Current MVP uses `window.open()` from the content script instead of privileged tab APIs.
+- The content script manifest must load `src/tabRunner.js` and `src/productService.js` before `src/shoppingList.js` and `src/revista.js`, because those modules are referenced through `window.CotoSorter` at runtime.
+
+## Refactor: Shared Services
+- `tabRunner` (`src/tabRunner.js`): centralizes paced opening of search tabs (`openBatchTabs`) and a cross-tab queue/lock (`waitForBatchTurn` / `releaseBatchTurn`) to avoid concurrent Vista Ligera runs and race conditions.
+- `productService` (`src/productService.js`): single place to normalize product records from API responses or DOM-parsed pages. `revista.js`, the favorites scan, and the modal price-summary renderer now prefer this service to keep field naming consistent.
+- `utils.slugify` moved to `src/utils.js` and used across `shoppingList`, `favorites`, and `ui` to reduce duplication.
 
 ## Data Flow (5-8 steps)
 1. User saves products as favorites or opens the shopping list modal.
@@ -70,6 +76,7 @@
 
 ## UI Notes
 - The modal now has a `Listas Manuales` tab and a collapsible `Favoritos Guardados` section.
+- The manual-list collapse button shows `Lista Manual` as its visible label.
 - The save, new, delete, open, select all, and deselect all actions are arranged in compact single rows.
 - Manual lists are saved as named items, and clicking one reloads the same textarea for editing.
 - Clicking a favorite row toggles its checkbox, not just the checkbox itself.
@@ -87,6 +94,7 @@
 - Render a green badge when the favorite is currently on discount and a grey badge when it is not.
 - Keep the search/check flow isolated from the manual-lists batch launcher so the two workflows stay independent.
 - Prefer reusing the existing badge extraction logic instead of duplicating DOM parsing in the new scan action.
+	- Implementation note: `productService.extractProductsFromPageUrl` will attempt the API scrape first, then fall back to DOM parsing via `badges.extractProductData` to keep a single fallback path.
 
 ## Edit Impact Checklist
 - If tab orchestration changes, review `features/f07-ui-panel-actions.md`.

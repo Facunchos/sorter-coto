@@ -60,6 +60,12 @@
   function init() {
     debugLog("Initializing Coto Sorter");
 
+    try {
+      document.documentElement.setAttribute("data-coto-sorter-loaded", "true");
+    } catch {
+      /* ignore */
+    }
+
     setupApiUrlCapture();
     const uiModule = getUIModule();
     if (uiModule && typeof uiModule.injectUI === "function") {
@@ -69,8 +75,25 @@
     }
     setupObserver();
     const shoppingListModule = getShoppingListModule();
-    if (shoppingListModule && typeof shoppingListModule.maybeAutoRunBatch === "function") {
-      shoppingListModule.maybeAutoRunBatch();
+    if (shoppingListModule) {
+      // Run migrations for favorites storage if available, then possibly auto-run batch
+      try {
+        if (typeof shoppingListModule?.migrateFavoritesIfNeeded === "function") {
+          // shoppingList doesn't expose migration directly; try favorites module
+        }
+        const favModule = window.CotoSorter?.favorites;
+        if (favModule && typeof favModule.migrateFavoritesIfNeeded === "function") {
+          favModule.migrateFavoritesIfNeeded().then((migrated) => {
+            if (migrated) debugLog("Favorites migrated to include last-seen snapshot fields");
+          }).catch(() => {});
+        }
+
+        if (typeof shoppingListModule.maybeAutoRunBatch === "function") {
+          shoppingListModule.maybeAutoRunBatch();
+        }
+      } catch (err) {
+        try { shoppingListModule.maybeAutoRunBatch(); } catch (e) { /* ignore */ }
+      }
     }
 
     // Inyectar badges iniciales tras render de Angular

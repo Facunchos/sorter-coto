@@ -68,11 +68,7 @@ window.CotoSorter.favorites = (function () {
   }
 
   function toSlug(value) {
-    return normalizeAccents(value)
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    return window.CotoSorter.utils.slugify(value);
   }
 
   function buildFavoriteId(data) {
@@ -287,6 +283,45 @@ window.CotoSorter.favorites = (function () {
     favorites[index] = nextFavorite;
     await saveFavorites(favorites);
     return { saved: true, favorite: nextFavorite };
+  }
+
+  // Safe migration helper: populate last-seen snapshot fields from older favorites
+  async function migrateFavoritesIfNeeded() {
+    try {
+      const current = await getFavorites();
+      let changed = false;
+      const next = (current || []).map((raw) => {
+        const f = normalizeFavorite(raw) || {};
+
+        const needDisplay = f.lastSeenDisplayedPrice == null && f.activePrice != null;
+        const needRegular = f.lastSeenRegularPrice == null && f.referencePrice != null;
+        const needAdjusted = f.lastSeenAdjustedUnitPrice == null && f.adjustedReferencePrice != null;
+        const needRatio = f.lastSeenDiscountRatio == null && f.discountRatio != null;
+        const needChecked = !f.lastCheckedAt && f.createdAt;
+
+        if (needDisplay || needRegular || needAdjusted || needRatio || needChecked) {
+          changed = true;
+        }
+
+        return {
+          ...f,
+          lastSeenDisplayedPrice: needDisplay ? f.activePrice : f.lastSeenDisplayedPrice,
+          lastSeenRegularPrice: needRegular ? f.referencePrice : f.lastSeenRegularPrice,
+          lastSeenAdjustedUnitPrice: needAdjusted ? f.adjustedReferencePrice : f.lastSeenAdjustedUnitPrice,
+          lastSeenDiscountRatio: needRatio ? f.discountRatio : f.lastSeenDiscountRatio,
+          lastCheckedAt: needChecked ? f.createdAt : f.lastCheckedAt,
+        };
+      });
+
+      if (changed) {
+        await saveFavorites(next);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.debug("favorites: migration check failed", err?.message || err);
+      return false;
+    }
   }
 
   async function toggleFavorite(data) {

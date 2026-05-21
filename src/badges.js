@@ -123,23 +123,27 @@ window.CotoSorter.badges = (function () {
     const name = String(nameEl?.textContent || nameEl?.innerText || "").trim();
     const hrefEl = wrapper.querySelector("a[href]") || productEl.querySelector("a[href]");
     const imgEl = wrapper.querySelector("img") || productEl.querySelector("img");
-    const favoriteData = name ? {
-      name,
-      brand: resolveBrand({ name }),
-      href: String(hrefEl?.href || ""),
-      imgSrc: String(imgEl?.src || ""),
-      searchTerm: name,
-      // Keep a price snapshot so favorites render immediately with Vista Ligera-like keys.
-      priceText: data ? formatPrice(data.regularPrice || data.displayedPrice || 0) : "",
-      discountedPriceText: data && data.discountRatio < 0.999 ? formatPrice(data.displayedPrice || 0) : null,
-      activePrice: data ? data.displayedPrice : null,
-      referencePrice: data ? data.regularPrice : null,
-      adjustedReferencePrice: data ? data.adjustedUnitPrice : null,
-      discountRatio: data ? data.discountRatio : 1,
-      promoPriceRaw: data && data.discountRatio < 0.999 ? data.displayedPrice : null,
-      promoTags: data && data.discountRatio < 0.999 ? ["Favorito verificado"] : [],
-      lastCheckedAt: Date.now(),
-    } : null;
+    const productService = window.CotoSorter?.productService;
+    const favoriteData = name && productService && typeof productService.buildFavoriteSnapshot === "function"
+      ? productService.buildFavoriteSnapshot({
+          name,
+          brand: resolveBrand({ name }),
+          href: String(hrefEl?.href || ""),
+          imgSrc: String(imgEl?.src || ""),
+          priceText: data ? formatPrice(data.regularPrice || data.displayedPrice || 0) : "",
+          discountedPriceText: data && data.discountRatio < 0.999 ? formatPrice(data.displayedPrice || 0) : null,
+          activePrice: data ? data.displayedPrice : null,
+          referencePrice: data ? data.regularPrice : null,
+          adjustedReferencePrice: data ? data.adjustedUnitPrice : null,
+          discountRatio: data ? data.discountRatio : 1,
+          promoPriceRaw: data && data.discountRatio < 0.999 ? data.displayedPrice : null,
+          promoTags: data && data.discountRatio < 0.999 ? ["Favorito verificado"] : [],
+        }, {
+          searchTerm: name,
+          writtenText: name,
+          lastCheckedAt: Date.now(),
+        })
+      : null;
 
     if (favoriteData && window.CotoSorter.favorites && window.CotoSorter.favorites.buildFavoriteId) {
       favoriteData.id = window.CotoSorter.favorites.buildFavoriteId(favoriteData);

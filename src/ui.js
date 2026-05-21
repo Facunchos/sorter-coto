@@ -25,11 +25,7 @@ window.CotoSorter.ui = (function () {
   }
 
   function toSearchSlug(term) {
-    return normalizeAccents(term)
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    return window.CotoSorter.utils.slugify(term);
   }
 
   function triggerSiteSearch(searchTerm) {

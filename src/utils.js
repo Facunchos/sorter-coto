@@ -54,6 +54,15 @@ window.CotoSorter.utils = (function () {
       .replace(/[\u0300-\u036f]/g, "");
   }
 
+  /** Crea un slug seguro desde texto (usa normalizeAccents internamente). */
+  function slugify(value) {
+    return normalizeAccents(String(value || ""))
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
   /** Normaliza texto de unidad del DOM a tipo interno ("weight", "volume", etc). */
   function normalizeUnitType(unitText, qty) {
     const lower = unitText.toLowerCase().trim();
@@ -129,6 +138,7 @@ window.CotoSorter.utils = (function () {
     formatPrice,
     formatApiPrice,
     normalizeAccents,
+    slugify,
     normalizeUnitType,
     cFormatoToUnitType,
     unitLabel,
