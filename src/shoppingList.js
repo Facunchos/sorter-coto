@@ -10,6 +10,8 @@ window.CotoSorter.shoppingList = (function () {
 
   const HASH_KEY = "coto-sorter-batch";
   const SESSION_PREFIX = "cotoSorterBatchStarted:";
+  const BATCH_QUEUE_KEY = "cotoSorterBatchQueueV1";
+  const BATCH_LOCK_KEY = "cotoSorterBatchLockV1";
   const OVERLAY_CLASS = "coto-sorter-shopping-overlay";
 
   function toSlug(value) {
@@ -44,6 +46,81 @@ window.CotoSorter.shoppingList = (function () {
     return `${url}#${HASH_KEY}=${batchId}`;
   }
 
+  function formatSnapshotDate(timestamp) {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return new Intl.DateTimeFormat("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    }).format(new Date(value));
+  }
+
+  function buildFavoritePriceMeta(item) {
+    const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
+    const parseMoneyLoose = window.CotoSorter?.priceUtils?.parseMoneyLoose || ((value) => Number(value));
+    const regularPrice = Number.isFinite(Number(item?.referencePrice))
+      ? Number(item.referencePrice)
+      : Number.isFinite(Number(item?.lastSeenRegularPrice))
+      ? Number(item.lastSeenRegularPrice)
+      : Number.isFinite(parseMoneyLoose(item?.priceText))
+      ? parseMoneyLoose(item.priceText)
+      : null;
+    const discountedPrice = Number.isFinite(Number(item?.promoPriceRaw))
+      ? Number(item.promoPriceRaw)
+      : Number.isFinite(parseMoneyLoose(item?.discountedPriceText))
+      ? parseMoneyLoose(item.discountedPriceText)
+      : Number.isFinite(Number(item?.lastSeenDisplayedPrice))
+      ? Number(item.lastSeenDisplayedPrice)
+      : null;
+    const discountRatio = Number.isFinite(Number(item?.discountRatio))
+      ? Number(item.discountRatio)
+      : Number.isFinite(Number(item?.lastSeenDiscountRatio))
+      ? Number(item.lastSeenDiscountRatio)
+      : null;
+    const actualPrice = Number.isFinite(Number(item?.activePrice))
+      ? Number(item.activePrice)
+      : Number.isFinite(Number(item?.lastSeenAdjustedUnitPrice))
+      ? Number(item.lastSeenAdjustedUnitPrice)
+      : discountedPrice ?? regularPrice;
+    const checkedAt = formatSnapshotDate(item?.lastCheckedAt);
+    const hasSnapshot = !!checkedAt || regularPrice !== null || discountedPrice !== null || actualPrice !== null;
+    const hasDiscount = Number.isFinite(discountRatio) && discountRatio > 0 && discountRatio < 0.999;
+    const discountPct = hasDiscount ? Math.max(1, Math.round((1 - discountRatio) * 100)) : 0;
+    const lastPriceValue = hasDiscount
+      ? (discountedPrice ?? actualPrice ?? regularPrice)
+      : (actualPrice ?? regularPrice ?? discountedPrice);
+    const todayPriceValue = actualPrice;
+    const lastPriceState = hasDiscount ? "price-discount" : "price-regular";
+    const todayPriceState = Number.isFinite(Number(item?.discountRatio)) && Number(item.discountRatio) < 0.999
+      ? "price-discount"
+      : "price-regular";
+
+    const tooltipLines = {
+      checkedAt: checkedAt || "Verificación Pending",
+      regularPrice: regularPrice !== null ? formatPrice(regularPrice) : "Verificación Pending",
+      discountText: hasDiscount ? `-${discountPct}%` : "Sin descuento",
+      discountedPrice: discountedPrice !== null ? formatPrice(discountedPrice) : "Verificación Pending",
+      actualPrice: actualPrice !== null ? formatPrice(actualPrice) : "Verificación Pending",
+    };
+
+    return {
+      hasSnapshot,
+      hasDiscount,
+      discountPct,
+      checkedAt,
+      regularPrice,
+      discountedPrice,
+      actualPrice,
+      lastPriceValue,
+      todayPriceValue,
+      lastPriceState,
+      todayPriceState,
+      tooltipLines,
+      visibleLabel: "Prices",
+    };
+  }
+
   function getBatchItemIdFromLocation() {
     const hash = String(window.location.hash || "").replace(/^#/, "");
     if (!hash) return null;
@@ -53,6 +130,99 @@ window.CotoSorter.shoppingList = (function () {
 
   function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function readJsonStorage(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return parsed == null ? fallback : parsed;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writeJsonStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function readBatchQueue() {
+    const queue = readJsonStorage(BATCH_QUEUE_KEY, []);
+    return Array.isArray(queue) ? queue.filter(Boolean) : [];
+  }
+
+  function writeBatchQueue(queue) {
+    writeJsonStorage(BATCH_QUEUE_KEY, Array.isArray(queue) ? queue : []);
+  }
+
+  function getBatchLock() {
+    return String(localStorage.getItem(BATCH_LOCK_KEY) || "");
+  }
+
+  function setBatchLock(itemId) {
+    try {
+      localStorage.setItem(BATCH_LOCK_KEY, String(itemId || ""));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function clearBatchLock(itemId) {
+    try {
+      const current = getBatchLock();
+      if (!current || !itemId || current === itemId) {
+        localStorage.removeItem(BATCH_LOCK_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function enqueueBatchItem(itemId) {
+    const queue = readBatchQueue();
+    if (!queue.includes(itemId)) {
+      queue.push(itemId);
+      writeBatchQueue(queue);
+    }
+  }
+
+  function dequeueBatchItem(itemId) {
+    const queue = readBatchQueue().filter((queuedId) => queuedId !== itemId);
+    writeBatchQueue(queue);
+  }
+
+  async function waitForBatchTurn(itemId, timeoutMs = 180000) {
+    enqueueBatchItem(itemId);
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const queue = readBatchQueue();
+      const lock = getBatchLock();
+
+      if (queue[0] === itemId && (!lock || lock === itemId)) {
+        setBatchLock(itemId);
+        return true;
+      }
+
+      if (!queue.includes(itemId)) {
+        enqueueBatchItem(itemId);
+      }
+
+      await wait(500);
+    }
+
+    dequeueBatchItem(itemId);
+    return false;
+  }
+
+  function releaseBatchTurn(itemId) {
+    dequeueBatchItem(itemId);
+    clearBatchLock(itemId);
   }
 
   async function waitForProducts(maxWaitMs) {
@@ -87,16 +257,23 @@ window.CotoSorter.shoppingList = (function () {
       return true;
     }
 
-    setTimeout(() => {
+    const gotTurn = await waitForBatchTurn(itemId);
+    if (!gotTurn) {
+      debugLog("Batch tab timed out waiting for its queue turn", itemId);
+      return true;
+    }
+
+    try {
       const revistaModule = window.CotoSorter.revista;
       if (!revistaModule || typeof revistaModule.startRevistaHTMLGeneration !== "function") {
         debugLog("Batch tab could not find Vista Ligera generator", itemId);
-        return;
+        return true;
       }
 
       debugLog("Batch tab launching Vista Ligera", itemId);
-      revistaModule.startRevistaHTMLGeneration(null, () => {});
-
+      await revistaModule.startRevistaHTMLGeneration(null, () => {});
+    } finally {
+      releaseBatchTurn(itemId);
       setTimeout(() => {
         try {
           if (!window.closed) {
@@ -106,7 +283,7 @@ window.CotoSorter.shoppingList = (function () {
           debugLog("Batch tab could not close itself", err?.message || err);
         }
       }, 1000);
-    }, 300);
+    }
 
     return true;
   }
@@ -140,12 +317,103 @@ window.CotoSorter.shoppingList = (function () {
     text.className = "coto-sorter-shopping-row-text";
     text.textContent = item.name;
 
-    const note = document.createElement("div");
-    note.className = "coto-sorter-shopping-row-note";
-    note.textContent = item.writtenText && item.writtenText !== item.name ? item.writtenText : item.searchTerm || item.name;
+    const priceMeta = buildFavoritePriceMeta(item);
+    const priceBlock = document.createElement("div");
+    priceBlock.className = "coto-sorter-fav-price-block";
+
+    const priceLabel = document.createElement("div");
+    priceLabel.className = "coto-sorter-fav-price-label";
+    priceLabel.textContent = priceMeta.visibleLabel;
+
+    const priceState = document.createElement("span");
+    priceState.className = "coto-sorter-fav-price-state";
+    priceState.textContent = priceMeta.checkedAt || "Verificación Pending";
+
+    const hoverWrap = document.createElement("div");
+    hoverWrap.className = "coto-sorter-fav-price-hover";
+
+    const hoverTitle = document.createElement("div");
+    hoverTitle.className = "coto-sorter-fav-price-hover-title";
+    hoverTitle.textContent = priceMeta.checkedAt || "Verificación Pending";
+
+    const hoverList = document.createElement("div");
+    hoverList.className = "coto-sorter-fav-price-hover-list";
+
+    if (priceMeta.hasSnapshot) {
+      const fields = [
+        ["Precio regular", priceMeta.tooltipLines.regularPrice],
+        ["Descuento", priceMeta.tooltipLines.discountText],
+        ["Precio con descuento", priceMeta.tooltipLines.discountedPrice],
+        ["Precio actual", priceMeta.tooltipLines.actualPrice],
+      ];
+
+      for (const [label, value] of fields) {
+        const row = document.createElement("div");
+        row.className = "coto-sorter-fav-price-hover-row";
+
+        const rowLabel = document.createElement("span");
+        rowLabel.className = "coto-sorter-fav-price-hover-key";
+        rowLabel.textContent = label;
+
+        const rowValue = document.createElement("span");
+        rowValue.className = "coto-sorter-fav-price-hover-value";
+        rowValue.textContent = value;
+
+        row.appendChild(rowLabel);
+        row.appendChild(rowValue);
+        hoverList.appendChild(row);
+      }
+
+      if (priceMeta.hasDiscount) {
+        const discountBadge = document.createElement("span");
+        discountBadge.className = "badge coto-sorter-fav-discount-badge";
+        discountBadge.textContent = `-${priceMeta.discountPct}%`;
+        priceBlock.appendChild(priceLabel);
+        priceBlock.appendChild(priceState);
+        priceBlock.appendChild(discountBadge);
+      } else {
+        priceBlock.appendChild(priceLabel);
+        priceBlock.appendChild(priceState);
+      }
+    } else {
+      const pendingLine = document.createElement("div");
+      pendingLine.className = "coto-sorter-fav-price-pending";
+      pendingLine.textContent = "Verificación Pending";
+      priceBlock.appendChild(priceLabel);
+      priceBlock.appendChild(priceState);
+      priceBlock.appendChild(pendingLine);
+    }
+
+    const hoverTitleDate = document.createElement("div");
+    hoverTitleDate.className = "coto-sorter-fav-price-hover-date";
+    hoverTitleDate.textContent = priceMeta.tooltipLines.checkedAt;
+
+    const visibleLastLine = document.createElement("div");
+    visibleLastLine.className = "coto-sorter-fav-price-visible-line";
+    visibleLastLine.textContent = "Último precio";
+
+    const visibleLastValue = document.createElement("div");
+    visibleLastValue.className = `coto-sorter-fav-price-visible-value ${priceMeta.lastPriceState}`;
+    visibleLastValue.textContent = priceMeta.lastPriceValue !== null ? window.CotoSorter.utils.formatPrice(priceMeta.lastPriceValue) : "Verificación Pending";
+
+    const visibleTodayLine = document.createElement("div");
+    visibleTodayLine.className = "coto-sorter-fav-price-visible-line is-today";
+    visibleTodayLine.textContent = "Precio actual";
+
+    const visibleTodayValue = document.createElement("div");
+    visibleTodayValue.className = `coto-sorter-fav-price-visible-value ${priceMeta.todayPriceState}`;
+    visibleTodayValue.textContent = priceMeta.todayPriceValue !== null ? window.CotoSorter.utils.formatPrice(priceMeta.todayPriceValue) : "Verificación Pending";
+
+    hoverWrap.appendChild(hoverTitleDate);
+    hoverWrap.appendChild(hoverList);
+    priceBlock.appendChild(visibleLastLine);
+    priceBlock.appendChild(visibleLastValue);
+    priceBlock.appendChild(visibleTodayLine);
+    priceBlock.appendChild(visibleTodayValue);
+    priceBlock.appendChild(hoverWrap);
 
     body.appendChild(text);
-    body.appendChild(note);
+    body.appendChild(priceBlock);
 
     const actions = document.createElement("div");
     actions.className = "coto-sorter-shopping-row-actions";
@@ -166,9 +434,25 @@ window.CotoSorter.shoppingList = (function () {
     deleteBtn.className = "coto-sorter-shopping-icon-btn coto-sorter-shopping-icon-danger";
     deleteBtn.textContent = "🗑";
     deleteBtn.title = "Eliminar favorito";
+    // Two-click confirm deletion (matches manual lists behavior)
+    deleteBtn.dataset.confirming = "0";
+    deleteBtn.dataset.favDeleteId = item.id;
     deleteBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      const confirming = deleteBtn.dataset.confirming === "1";
+      if (!confirming) {
+        deleteBtn.dataset.confirming = "1";
+        // use a compact white-check on red circle to avoid layout break
+        deleteBtn.textContent = "✔";
+        deleteBtn.classList.add("is-danger", "is-confirming");
+        return;
+      }
+
+      // second click — perform delete
+      deleteBtn.dataset.confirming = "0";
+      deleteBtn.textContent = "🗑";
+      deleteBtn.classList.remove("is-danger", "is-confirming");
       if (onDelete) onDelete(item);
     });
 
@@ -178,6 +462,13 @@ window.CotoSorter.shoppingList = (function () {
     row.appendChild(checkboxWrap);
     row.appendChild(body);
     row.appendChild(actions);
+
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, label")) return;
+      checkbox.checked = !checkbox.checked;
+      if (onToggleChecked) onToggleChecked(item, checkbox.checked);
+    });
+
     return row;
   }
 
@@ -216,6 +507,12 @@ window.CotoSorter.shoppingList = (function () {
     body.appendChild(meta);
     body.addEventListener("click", () => {
       if (onSelect) onSelect(item);
+    });
+
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, label")) return;
+      checkbox.checked = !checkbox.checked;
+      if (onToggleChecked) onToggleChecked(item, checkbox.checked);
     });
 
     row.appendChild(checkboxWrap);
@@ -279,6 +576,124 @@ window.CotoSorter.shoppingList = (function () {
     }
   }
 
+    async function runFavoritesScan() {
+      const allFavorites = await favorites.getFavorites();
+      if (!allFavorites || allFavorites.length === 0) {
+        alert("No hay favoritos guardados para verificar.");
+        return;
+      }
+
+      const toScan = Array.from(allFavorites);
+
+      function normalizeForMatch(value) {
+        return toSlug(String(value || ""));
+      }
+
+      function pickMatchingProduct(favorite, products) {
+        const favoriteName = normalizeForMatch(favorite?.name || favorite?.searchTerm);
+        const favoriteBrand = normalizeForMatch(favorite?.brand);
+
+        const exact = products.find((product) => normalizeForMatch(product?.name) === favoriteName);
+        if (exact) return exact;
+
+        const brandMatch = products.find((product) => {
+          const productName = normalizeForMatch(product?.name);
+          const productBrand = normalizeForMatch(product?.brand || product?.productBrand || product?.brandName);
+          return productName === favoriteName && (!favoriteBrand || productBrand === favoriteBrand);
+        });
+        if (brandMatch) return brandMatch;
+
+        return products.find((product) => normalizeForMatch(product?.name).includes(favoriteName)) || null;
+      }
+
+      function buildProductPatch(product) {
+        if (!product) return null;
+        return {
+          brand: product.brand || product.productBrand || product.brandName || null,
+          productBrand: product.productBrand || product.brand || null,
+          product_brand: product.product_brand || product.brand || null,
+          href: product.href || null,
+          imgSrc: product.imgSrc || null,
+          priceText: product.priceText || null,
+          discountedPriceText: product.discountedPriceText || null,
+          badges: Array.isArray(product.badges) ? product.badges : [],
+          unitPriceText: product.unitPriceText || null,
+          unitType: product.unitType || null,
+          activePrice: Number.isFinite(Number(product.activePrice)) ? Number(product.activePrice) : null,
+          referencePrice: Number.isFinite(Number(product.referencePrice)) ? Number(product.referencePrice) : null,
+          adjustedReferencePrice: Number.isFinite(Number(product.adjustedReferencePrice)) ? Number(product.adjustedReferencePrice) : null,
+          discountRatio: Number.isFinite(Number(product.discountRatio)) ? Number(product.discountRatio) : 1,
+          promoPriceRaw: Number.isFinite(Number(product.promoPriceRaw)) ? Number(product.promoPriceRaw) : null,
+          maxFormatPriceRaw: Number.isFinite(Number(product.maxFormatPriceRaw)) ? Number(product.maxFormatPriceRaw) : null,
+          promoTags: Array.isArray(product.promoTags) ? product.promoTags : [],
+          lastCheckedAt: Date.now(),
+        };
+      }
+
+      for (const fav of toScan) {
+        try {
+          const term = normalizeSearchTerm(fav.searchTerm || fav.name);
+          const url = buildSearchUrl(term);
+          if (!url) continue;
+
+          let patch = null;
+          const apiModule = window.CotoSorter?.api;
+
+          if (apiModule && typeof apiModule.scrapeProductsFromPageUrl === "function") {
+            const products = await apiModule.scrapeProductsFromPageUrl(url);
+            const matched = pickMatchingProduct(fav, products);
+            patch = buildProductPatch(matched);
+          }
+
+          if (!patch) {
+            // Fallback: fetch page and read the first visible card, keeping legacy behavior.
+            const resp = await fetch(url, { credentials: "same-origin" });
+            if (!resp || resp.status !== 200) continue;
+            const html = await resp.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+
+            const productEl = doc.querySelector(".producto-card, [data-cnstrc-item-price], .card-container");
+            const badgeData = productEl && window.CotoSorter?.badges?.extractProductData
+              ? window.CotoSorter.badges.extractProductData(productEl)
+              : null;
+
+            if (badgeData) {
+              patch = {
+                priceText: Number.isFinite(Number(badgeData.regularPrice)) ? window.CotoSorter.utils.formatPrice(badgeData.regularPrice) : null,
+                discountedPriceText: badgeData.discountRatio < 0.999 && Number.isFinite(Number(badgeData.displayedPrice))
+                  ? window.CotoSorter.utils.formatPrice(badgeData.displayedPrice)
+                  : null,
+                activePrice: Number.isFinite(Number(badgeData.displayedPrice)) ? Number(badgeData.displayedPrice) : null,
+                referencePrice: Number.isFinite(Number(badgeData.regularPrice)) ? Number(badgeData.regularPrice) : null,
+                adjustedReferencePrice: Number.isFinite(Number(badgeData.adjustedUnitPrice)) ? Number(badgeData.adjustedUnitPrice) : null,
+                discountRatio: Number.isFinite(Number(badgeData.discountRatio)) ? Number(badgeData.discountRatio) : 1,
+                unitType: badgeData.unitType || null,
+                unitPriceText: badgeData.unitRawLabel ? `$/` + badgeData.unitRawLabel + `: ${window.CotoSorter.utils.formatPrice(badgeData.listedUnitPrice)}` : null,
+                lastSeenDisplayedPrice: badgeData.displayedPrice,
+                lastSeenRegularPrice: badgeData.regularPrice,
+                lastSeenAdjustedUnitPrice: badgeData.adjustedUnitPrice,
+                lastSeenDiscountRatio: badgeData.discountRatio,
+                lastCheckedAt: Date.now(),
+              };
+            }
+          }
+
+          if (!patch) {
+            patch = { lastCheckedAt: Date.now() };
+          }
+
+          await favorites.updateFavorite(fav.id, patch);
+          await refreshFavoritesList();
+          await wait(250);
+        } catch (err) {
+          console.debug('Error scanning favorite', fav && fav.name, err?.message || err);
+        }
+      }
+
+      alert('Verificación de favoritos completada.');
+    }
+
   async function openShoppingListModal() {
     closeModal();
 
@@ -335,8 +750,24 @@ window.CotoSorter.shoppingList = (function () {
     favoritesPanel.className = "coto-sorter-shopping-tab-panel";
     favoritesPanel.hidden = true;
 
-    const manualTop = document.createElement("div");
-    manualTop.className = "coto-sorter-shopping-section";
+    const manualSection = document.createElement("div");
+    manualSection.className = "coto-sorter-shopping-section";
+
+    const manualToggleBtn = document.createElement("button");
+    manualToggleBtn.type = "button";
+    manualToggleBtn.className = "coto-sorter-shopping-collapse-btn";
+
+    const manualToggleText = document.createElement("span");
+            // Deletion is handled by the row's two-click confirm UI.
+    const manualToggleCaret = document.createElement("span");
+    manualToggleCaret.className = "coto-sorter-shopping-caret";
+    manualToggleCaret.textContent = "▾";
+
+    manualToggleBtn.appendChild(manualToggleText);
+    manualToggleBtn.appendChild(manualToggleCaret);
+
+    const manualBody = document.createElement("div");
+    manualBody.className = "coto-sorter-shopping-collapsible-body";
 
     const manualLabel = document.createElement("label");
     manualLabel.className = "coto-sorter-shopping-label";
@@ -396,41 +827,30 @@ window.CotoSorter.shoppingList = (function () {
     manualListsWrap.appendChild(manualListsTitle);
     manualListsWrap.appendChild(manualListsList);
 
-    manualTop.appendChild(manualLabel);
-    manualTop.appendChild(manualNameInput);
-    manualTop.appendChild(manualItemsLabel);
-    manualTop.appendChild(manualInput);
-    manualTop.appendChild(manualStatus);
-    manualTop.appendChild(manualActions);
-    manualTop.appendChild(manualListsWrap);
+    manualBody.appendChild(manualLabel);
+    manualBody.appendChild(manualNameInput);
+    manualBody.appendChild(manualItemsLabel);
+    manualBody.appendChild(manualInput);
+    manualBody.appendChild(manualStatus);
+    manualBody.appendChild(manualActions);
+
+    manualSection.appendChild(manualToggleBtn);
+    manualSection.appendChild(manualBody);
+    manualSection.appendChild(manualListsWrap);
 
     const favoritesTop = document.createElement("div");
     favoritesTop.className = "coto-sorter-shopping-section";
 
-    const favoritesCollapseBtn = document.createElement("button");
-    favoritesCollapseBtn.type = "button";
-    favoritesCollapseBtn.className = "coto-sorter-shopping-collapse-btn";
-
-    const favoritesCollapseText = document.createElement("span");
-    favoritesCollapseText.textContent = "Favoritos Guardados";
-
-    const favoritesCollapseCaret = document.createElement("span");
-    favoritesCollapseCaret.className = "coto-sorter-shopping-caret";
-    favoritesCollapseCaret.textContent = "▾";
-
-    favoritesCollapseBtn.appendChild(favoritesCollapseText);
-    favoritesCollapseBtn.appendChild(favoritesCollapseCaret);
-
-    const favoritesBody = document.createElement("div");
-    favoritesBody.className = "coto-sorter-shopping-collapsible-body";
+    const favoritesTitle = document.createElement("div");
+    favoritesTitle.className = "coto-sorter-shopping-label";
+    favoritesTitle.textContent = "Favoritos Guardados";
 
     const favoritesList = document.createElement("div");
     favoritesList.className = "coto-sorter-shopping-list";
     favoritesList.textContent = "Cargando favoritos...";
 
-    favoritesBody.appendChild(favoritesList);
-    favoritesTop.appendChild(favoritesCollapseBtn);
-    favoritesTop.appendChild(favoritesBody);
+    favoritesTop.appendChild(favoritesTitle);
+    favoritesTop.appendChild(favoritesList);
 
     const footerActions = document.createElement("div");
     footerActions.className = "coto-sorter-shopping-actions";
@@ -451,11 +871,31 @@ window.CotoSorter.shoppingList = (function () {
     deselectAllBtn.type = "button";
     deselectAllBtn.textContent = "Deseleccionar todo";
 
+    // Verify favorites button (scans favorites for last-seen price)
+    const verifyBtn = document.createElement("button");
+    verifyBtn.className = "coto-sorter-btn coto-sorter-shopping-secondary";
+    verifyBtn.type = "button";
+    verifyBtn.textContent = "Verificar favoritos";
+    verifyBtn.title = "Visita las búsquedas de favoritos y guarda el último precio visto";
+    verifyBtn.addEventListener("click", async () => {
+      verifyBtn.disabled = true;
+      const prev = verifyBtn.textContent;
+      verifyBtn.textContent = "Verificando...";
+      try {
+        await runFavoritesScan();
+      } catch (err) {
+        console.error("Favorites scan failed", err);
+      }
+      verifyBtn.textContent = prev;
+      verifyBtn.disabled = false;
+    });
+
     footerActions.appendChild(openBtn);
     footerActions.appendChild(selectAllBtn);
     footerActions.appendChild(deselectAllBtn);
+    footerActions.appendChild(verifyBtn);
 
-    manualPanel.appendChild(manualTop);
+    manualPanel.appendChild(manualSection);
     favoritesPanel.appendChild(favoritesTop);
     panels.appendChild(manualPanel);
     panels.appendChild(favoritesPanel);
@@ -476,6 +916,8 @@ window.CotoSorter.shoppingList = (function () {
     let manualListsState = [];
     let selectedManualList = null;
     let favoritesExpanded = true;
+    let manualEditorExpanded = true;
+    let deleteManualConfirmPending = false;
     const selectedFavoriteIds = new Set();
     const selectedManualListIds = new Set();
 
@@ -492,9 +934,14 @@ window.CotoSorter.shoppingList = (function () {
 
     function setFavoritesExpanded(expanded) {
       favoritesExpanded = expanded;
-      favoritesBody.hidden = !expanded;
-      favoritesCollapseBtn.classList.toggle("is-collapsed", !expanded);
-      favoritesCollapseCaret.textContent = expanded ? "▾" : "▸";
+      // No-op retained for compatibility with older state callers.
+    }
+
+    function setManualEditorExpanded(expanded) {
+      manualEditorExpanded = expanded;
+      manualBody.hidden = !expanded;
+      manualToggleBtn.classList.toggle("is-collapsed", !expanded);
+      manualToggleCaret.textContent = expanded ? "▾" : "▸";
     }
 
     function syncManualDrafts() {
@@ -509,6 +956,17 @@ window.CotoSorter.shoppingList = (function () {
         selectedFavoriteIds.delete(item.id);
       }
       updateActionButtonState();
+      // Reset any pending delete confirmation UI for this favorite row
+      try {
+        const btn = favoritesList.querySelector(`button[data-fav-delete-id="${item.id}"]`);
+        if (btn) {
+          btn.dataset.confirming = "0";
+          btn.textContent = "🗑";
+          btn.classList.remove("is-danger", "is-confirming");
+        }
+      } catch (err) {
+        /* ignore DOM lookup errors */
+      }
     }
 
     function setManualListChecked(item, checked) {
@@ -516,6 +974,11 @@ window.CotoSorter.shoppingList = (function () {
         selectedManualListIds.add(item.id);
       } else {
         selectedManualListIds.delete(item.id);
+      }
+      deleteManualConfirmPending = false;
+      if (selectedManualList) {
+        deleteManualBtn.textContent = "Eliminar lista";
+        deleteManualBtn.classList.remove("is-danger", "is-confirming");
       }
       updateActionButtonState();
     }
@@ -602,28 +1065,26 @@ window.CotoSorter.shoppingList = (function () {
               return;
             }
 
-            const result = await favorites.updateFavorite(currentItem.id, patch);
-            if (!result.saved) {
-              alert("No se pudo actualizar el favorito.");
-              return;
-            }
+              const result = await favorites.updateFavorite(currentItem.id, patch);
+              if (!result.saved) {
+                alert("No se pudo actualizar el favorito.");
+                return;
+              }
 
-            await refreshFavoritesList();
+              await refreshFavoritesList();
           },
-          async (currentItem) => {
-            const confirmed = window.confirm(`Eliminar el favorito \"${currentItem.name}\"?`);
-            if (!confirmed) return;
+            async (currentItem) => {
+              // Deletion is confirmed via the row UI (two clicks). Proceed to remove.
+              const removed = await favorites.removeFavorite(currentItem.id);
+              if (!removed) {
+                alert("No se pudo eliminar el favorito.");
+                return;
+              }
 
-            const removed = await favorites.removeFavorite(currentItem.id);
-            if (!removed) {
-              alert("No se pudo eliminar el favorito.");
-              return;
-            }
-
-            selectedFavoriteIds.delete(currentItem.id);
-            updateActionButtonState();
-            await refreshFavoritesList();
-          },
+              selectedFavoriteIds.delete(currentItem.id);
+              updateActionButtonState();
+              await refreshFavoritesList();
+            },
           (currentItem, checked) => setFavoriteChecked(currentItem, checked)
         );
         favoritesList.appendChild(row);
@@ -676,6 +1137,9 @@ window.CotoSorter.shoppingList = (function () {
       manualInput.value = result.manualList.text;
       manualStatus.textContent = `Guardada: ${result.manualList.name}`;
       deleteManualBtn.disabled = false;
+      deleteManualBtn.textContent = "Eliminar lista";
+      deleteManualBtn.classList.remove("is-danger", "is-confirming");
+      deleteManualConfirmPending = false;
       await favorites.saveDraftManualListName(manualNameInput.value);
       await favorites.saveDraftText(manualInput.value);
       await refreshManualListsList();
@@ -705,6 +1169,9 @@ window.CotoSorter.shoppingList = (function () {
     newManualBtn.addEventListener("click", async () => {
       selectedManualList = null;
       deleteManualBtn.disabled = true;
+      deleteManualBtn.textContent = "Eliminar lista";
+      deleteManualBtn.classList.remove("is-danger", "is-confirming");
+      deleteManualConfirmPending = false;
       manualNameInput.value = "";
       manualInput.value = "";
       manualStatus.textContent = "Nueva lista";
@@ -721,8 +1188,12 @@ window.CotoSorter.shoppingList = (function () {
         return;
       }
 
-      const confirmed = window.confirm(`Eliminar la lista manual \"${selectedManualList.name}\"?`);
-      if (!confirmed) return;
+      if (!deleteManualConfirmPending) {
+        deleteManualConfirmPending = true;
+        deleteManualBtn.textContent = "Confirmar eliminado?";
+        deleteManualBtn.classList.add("is-danger", "is-confirming");
+        return;
+      }
 
       const removed = await favorites.removeManualList(selectedManualList.id);
       if (!removed) {
@@ -736,14 +1207,17 @@ window.CotoSorter.shoppingList = (function () {
       manualInput.value = "";
       manualStatus.textContent = "Lista eliminada";
       deleteManualBtn.disabled = true;
+      deleteManualBtn.textContent = "Eliminar lista";
+      deleteManualBtn.classList.remove("is-danger", "is-confirming");
+      deleteManualConfirmPending = false;
       await favorites.saveDraftManualListName("");
       await favorites.saveDraftText("");
       await refreshManualListsList();
       updateActionButtonState();
     });
 
-    favoritesCollapseBtn.addEventListener("click", () => {
-      setFavoritesExpanded(!favoritesExpanded);
+    manualToggleBtn.addEventListener("click", () => {
+      setManualEditorExpanded(!manualEditorExpanded);
     });
 
     manualTabBtn.addEventListener("click", () => setActiveTab("manual"));
@@ -768,7 +1242,7 @@ window.CotoSorter.shoppingList = (function () {
     await refreshManualListsList();
     await refreshFavoritesList();
     setActiveTab("manual");
-    setFavoritesExpanded(true);
+    setManualEditorExpanded(true);
     updateActionButtonState();
   }
 

@@ -114,6 +114,7 @@ window.CotoSorter.badges = (function () {
     if (!productEl) return;
 
     const data = extractProductData(productEl);
+    const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
 
     const existingBadge = wrapper.querySelector("." + BADGE_CLASS);
     if (existingBadge) existingBadge.remove();
@@ -128,6 +129,16 @@ window.CotoSorter.badges = (function () {
       href: String(hrefEl?.href || ""),
       imgSrc: String(imgEl?.src || ""),
       searchTerm: name,
+      // Keep a price snapshot so favorites render immediately with Vista Ligera-like keys.
+      priceText: data ? formatPrice(data.regularPrice || data.displayedPrice || 0) : "",
+      discountedPriceText: data && data.discountRatio < 0.999 ? formatPrice(data.displayedPrice || 0) : null,
+      activePrice: data ? data.displayedPrice : null,
+      referencePrice: data ? data.regularPrice : null,
+      adjustedReferencePrice: data ? data.adjustedUnitPrice : null,
+      discountRatio: data ? data.discountRatio : 1,
+      promoPriceRaw: data && data.discountRatio < 0.999 ? data.displayedPrice : null,
+      promoTags: data && data.discountRatio < 0.999 ? ["Favorito verificado"] : [],
+      lastCheckedAt: Date.now(),
     } : null;
 
     if (favoriteData && window.CotoSorter.favorites && window.CotoSorter.favorites.buildFavoriteId) {

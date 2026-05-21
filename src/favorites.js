@@ -27,16 +27,20 @@ window.CotoSorter.favorites = (function () {
         return;
       }
 
-      area.get({ [key]: defaultValue }, (result) => {
-        if (chrome?.runtime?.lastError) {
-          resolve(defaultValue);
-          return;
-        }
+      try {
+        area.get({ [key]: defaultValue }, (result) => {
+          if (chrome?.runtime?.lastError) {
+            resolve(defaultValue);
+            return;
+          }
 
-        resolve(result && Object.prototype.hasOwnProperty.call(result, key)
-          ? result[key]
-          : defaultValue);
-      });
+          resolve(result && Object.prototype.hasOwnProperty.call(result, key)
+            ? result[key]
+            : defaultValue);
+        });
+      } catch (err) {
+        resolve(defaultValue);
+      }
     });
   }
 
@@ -48,14 +52,18 @@ window.CotoSorter.favorites = (function () {
         return;
       }
 
-      area.set({ [key]: value }, () => {
-        if (chrome?.runtime?.lastError) {
-          resolve();
-          return;
-        }
+      try {
+        area.set({ [key]: value }, () => {
+          if (chrome?.runtime?.lastError) {
+            resolve();
+            return;
+          }
 
+          resolve();
+        });
+      } catch (err) {
         resolve();
-      });
+      }
     });
   }
 
@@ -81,6 +89,8 @@ window.CotoSorter.favorites = (function () {
   function normalizeFavorite(data) {
     const name = String(data?.name || data?.searchTerm || "").trim();
     const note = String(data?.writtenText || data?.searchTerm || "").trim();
+    const priceText = data?.priceText != null ? String(data.priceText) : null;
+    const discountedPriceText = data?.discountedPriceText != null ? String(data.discountedPriceText) : null;
 
     if (!name) return null;
 
@@ -90,6 +100,25 @@ window.CotoSorter.favorites = (function () {
       searchTerm: String(data?.searchTerm || note || name).trim(),
       writtenText: note,
       createdAt: Number(data?.createdAt) || Date.now(),
+      brand: data?.brand ? String(data.brand) : null,
+      href: data?.href ? String(data.href) : null,
+      imgSrc: data?.imgSrc ? String(data.imgSrc) : null,
+      priceText,
+      discountedPriceText,
+      activePrice: Number.isFinite(Number(data?.activePrice)) ? Number(data.activePrice) : null,
+      referencePrice: Number.isFinite(Number(data?.referencePrice)) ? Number(data.referencePrice) : null,
+      adjustedReferencePrice: Number.isFinite(Number(data?.adjustedReferencePrice)) ? Number(data.adjustedReferencePrice) : null,
+      discountRatio: Number.isFinite(Number(data?.discountRatio)) ? Number(data.discountRatio) : 1,
+      promoPriceRaw: Number.isFinite(Number(data?.promoPriceRaw)) ? Number(data.promoPriceRaw) : null,
+      promoTags: Array.isArray(data?.promoTags) ? data.promoTags.map((item) => String(item)) : [],
+      unitPriceText: data?.unitPriceText != null ? String(data.unitPriceText) : null,
+      unitType: data?.unitType ? String(data.unitType) : null,
+      // Optional last-seen price snapshot fields (may be undefined)
+      lastSeenDisplayedPrice: Number.isFinite(Number(data?.lastSeenDisplayedPrice)) ? Number(data.lastSeenDisplayedPrice) : null,
+      lastSeenRegularPrice: Number.isFinite(Number(data?.lastSeenRegularPrice)) ? Number(data.lastSeenRegularPrice) : null,
+      lastSeenAdjustedUnitPrice: Number.isFinite(Number(data?.lastSeenAdjustedUnitPrice)) ? Number(data.lastSeenAdjustedUnitPrice) : null,
+      lastSeenDiscountRatio: Number.isFinite(Number(data?.lastSeenDiscountRatio)) ? Number(data.lastSeenDiscountRatio) : 1,
+      lastCheckedAt: Number(data?.lastCheckedAt) || null,
     };
   }
 

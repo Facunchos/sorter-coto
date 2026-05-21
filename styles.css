@@ -578,6 +578,13 @@
   background: #fff;
   cursor: pointer;
   min-width: 0;
+  position: relative;
+  z-index: 0;
+  overflow: visible;
+}
+
+.coto-sorter-shopping-row:hover {
+  z-index: 20;
 }
 
 .coto-sorter-shopping-row-check {
@@ -596,6 +603,8 @@
   min-width: 0;
   display: grid;
   gap: 3px;
+  position: relative;
+  overflow: visible;
 }
 
 .coto-sorter-shopping-row-text {
@@ -606,12 +615,151 @@
   word-break: break-word;
 }
 
-.coto-sorter-shopping-row-note {
+.coto-sorter-fav-price-block {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid #ead7cf;
+  background: linear-gradient(180deg, #fffaf7 0%, #fff 100%);
+  cursor: help;
+  position: relative;
+  isolation: isolate;
+}
+
+.coto-sorter-fav-price-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #8a6d62;
+  text-transform: uppercase;
+}
+
+.coto-sorter-fav-price-state {
   font-size: 12px;
-  color: #7f6d65;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  font-weight: 700;
+  color: #5b4a43;
+  line-height: 1.25;
+}
+
+.coto-sorter-fav-price-visible-line {
+  font-size: 11px;
+  font-weight: 800;
+  color: #8a6d62;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  line-height: 1.15;
+}
+
+.coto-sorter-fav-price-visible-line.is-today {
+  margin-top: 2px;
+}
+
+.coto-sorter-fav-price-visible-value {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.coto-sorter-fav-price-visible-value.price-regular {
+  color: #495057;
+}
+
+.coto-sorter-fav-price-visible-value.price-regular.striked {
+  color: #8a6d62;
+}
+
+.coto-sorter-fav-price-visible-value.price-discount {
+  color: #155724;
+}
+
+.coto-sorter-fav-price-pending {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a6d62;
+}
+
+.coto-sorter-fav-discount-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 2px;
+}
+
+.coto-sorter-fav-price-hover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  z-index: 1000;
+  min-width: min(320px, 86vw);
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(215, 93, 72, 0.2);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 40px rgba(88, 55, 38, 0.2);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.coto-sorter-fav-price-block:hover .coto-sorter-fav-price-hover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.coto-sorter-fav-price-hover-date {
+  font-size: 11px;
+  font-weight: 800;
+  color: #e20025;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.coto-sorter-fav-price-hover-list {
+  display: grid;
+  gap: 6px;
+}
+
+.coto-sorter-fav-price-hover-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.coto-sorter-fav-price-hover-key {
+  font-size: 12px;
+  color: #6d5a51;
+  font-weight: 700;
+}
+
+.coto-sorter-fav-price-hover-value {
+  font-size: 12px;
+  color: #2e2622;
+  font-weight: 800;
+  text-align: right;
+}
+
+.coto-sorter-fav-price-hover-row:last-child .coto-sorter-fav-price-hover-value {
+  color: #1f9866;
+}
+
+.coto-sorter-fav-price-hover::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 16px;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  border-left: 1px solid rgba(215, 93, 72, 0.2);
+  border-top: 1px solid rgba(215, 93, 72, 0.2);
+  transform: rotate(45deg);
 }
 
 .coto-sorter-shopping-row-actions {
@@ -660,6 +808,12 @@
 .coto-sorter-shopping-manual-item-text {
   font-size: 13px;
   font-weight: 700;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -668,6 +822,7 @@
   flex-shrink: 0;
   color: #8b7369;
   font-size: 12px;
+  text-align: center;
 }
 
 .coto-sorter-shopping-icon-btn {
@@ -696,6 +851,16 @@
   background: #fff0f0;
   color: #b94343;
   border-color: #d98989;
+}
+
+/* When icon button is in confirming state, render as solid red circle with white check */
+.coto-sorter-shopping-icon-btn.is-danger.is-confirming {
+  background: #b94343;
+  color: #fff;
+  border-color: #b94343;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
 }
 
 .coto-sorter-shopping-empty {
@@ -729,6 +894,18 @@
 
 .coto-sorter-shopping-secondary:hover {
   background: #f5f5f5;
+}
+
+.coto-sorter-shopping-secondary.is-danger,
+.coto-sorter-shopping-secondary.is-confirming {
+  border-color: #b94343;
+  color: #b94343;
+  background: #fff0f0;
+}
+
+.coto-sorter-shopping-secondary.is-danger:hover,
+.coto-sorter-shopping-secondary.is-confirming:hover {
+  background: #ffe3e3;
 }
 
 .coto-sorter-shopping-close {

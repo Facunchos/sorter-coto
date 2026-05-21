@@ -72,8 +72,21 @@
 - The modal now has a `Listas Manuales` tab and a collapsible `Favoritos Guardados` section.
 - The save, new, delete, open, select all, and deselect all actions are arranged in compact single rows.
 - Manual lists are saved as named items, and clicking one reloads the same textarea for editing.
+- Clicking a favorite row toggles its checkbox, not just the checkbox itself.
+- Manual-list deletion is a two-step button flow: first click arms the red confirm state, second click deletes.
 - The favorites section starts expanded but can be collapsed to reduce visual noise.
 - Saved favorites and saved manual lists are displayed as compact grid cards that wrap long names safely.
+- Favorite rows show only the editable name, without duplicating the name in a secondary line.
+- Favorite rows now render a `Prices` summary block with Vista Ligera-style regular/discount price classes and a custom hover card that shows the last verification date plus regular, discounted, discount-state, and actual price snapshots.
+- Favorite price snapshots prefer the same Vista Ligera keys used by generated cards (`priceText`, `discountedPriceText`, `activePrice`, `referencePrice`, `adjustedReferencePrice`, `discountRatio`, `promoPriceRaw`, `promoTags`) and fall back to legacy `lastSeen*` fields when needed.
+
+## Planned Favorite Price Scan
+- Add a favorites-only action button that scans each selected favorite one at a time.
+- Each scan should resolve the current product card, capture displayed price, regular price, and discount state.
+- Save the last seen price fields back into the favorite record so the item remembers what was observed.
+- Render a green badge when the favorite is currently on discount and a grey badge when it is not.
+- Keep the search/check flow isolated from the manual-lists batch launcher so the two workflows stay independent.
+- Prefer reusing the existing badge extraction logic instead of duplicating DOM parsing in the new scan action.
 
 ## Edit Impact Checklist
 - If tab orchestration changes, review `features/f07-ui-panel-actions.md`.

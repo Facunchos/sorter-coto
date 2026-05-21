@@ -193,6 +193,26 @@ window.CotoSorter.api = (function () {
     return url.toString();
   }
 
+  /** Construye una URL Endeca JSON desde una URL de página arbitraria. */
+  function buildEndecaApiUrlFromPageUrl(pageUrl, offset, nrpp) {
+    const baseHref = String(pageUrl || "");
+    if (!baseHref) return null;
+
+    let url;
+    try {
+      url = normalizeEndecaPathDuplication(new URL(baseHref));
+    } catch {
+      return null;
+    }
+
+    url = decodePathEncodedParams(url);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("No", String(offset));
+    url.searchParams.set("Nrpp", String(nrpp));
+    url.searchParams.delete("_dyncharset");
+    return url.toString();
+  }
+
   /** Construye URL paginada BFF manteniendo template capturado. */
   function buildBffPageUrl(baseUrl, page, nrpp) {
     const u = new URL(baseUrl);
@@ -739,5 +759,52 @@ window.CotoSorter.api = (function () {
     return scrapeViaBff(progressCallback);
   }
 
-  return { setupApiUrlCapture, scrapeAllPages };
+  /** Scraping de una URL de página concreta usando la misma lógica de parseo Endeca. */
+  async function scrapeProductsFromPageUrl(pageUrl, progressCallback) {
+    const firstUrl = buildEndecaApiUrlFromPageUrl(pageUrl, 0, ENDeca_BATCH);
+    if (!firstUrl) {
+      throw new Error("No se pudo construir la URL Endeca desde la página indicada.");
+    }
+
+    const firstResp = await fetch(firstUrl, { credentials: "same-origin" });
+    if (!firstResp.ok) throw new Error(`Endeca API error ${firstResp.status}`);
+
+    const firstData = await firstResp.json();
+    const resultsList = findResultsList(firstData);
+    if (!resultsList) {
+      throw new Error("La respuesta no contiene Category_ResultsList.");
+    }
+
+    const totalNumRecs = resultsList.totalNumRecs || 0;
+    if (progressCallback) progressCallback(0, totalNumRecs);
+
+    const allProducts = extractProductsFromResultsList(resultsList);
+    if (progressCallback) progressCallback(allProducts.length, totalNumRecs);
+
+    const remainingOffsets = [];
+    for (let offset = ENDeca_BATCH; offset < totalNumRecs; offset += ENDeca_BATCH) {
+      remainingOffsets.push(offset);
+    }
+
+    for (let i = 0; i < remainingOffsets.length; i += ENDeca_PARALLEL) {
+      const group = remainingOffsets.slice(i, i + ENDeca_PARALLEL);
+      const results = await Promise.all(
+        group.map(async (offset) => {
+          const url = buildEndecaApiUrlFromPageUrl(pageUrl, offset, ENDeca_BATCH);
+          if (!url) return [];
+          const resp = await fetch(url, { credentials: "same-origin" });
+          if (!resp.ok) throw new Error(`Endeca API error ${resp.status} at offset ${offset}`);
+          const data = await resp.json();
+          return extractProductsFromResultsList(findResultsList(data));
+        })
+      );
+
+      for (const batch of results) allProducts.push(...batch);
+      if (progressCallback) progressCallback(allProducts.length, totalNumRecs);
+    }
+
+    return allProducts;
+  }
+
+  return { setupApiUrlCapture, scrapeAllPages, scrapeProductsFromPageUrl };
 })();
