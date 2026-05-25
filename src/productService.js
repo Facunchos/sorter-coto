@@ -10,6 +10,70 @@ window.CotoSorter.productService = (function () {
     return Number.isFinite(Number(value)) ? Number(value) : null;
   }
 
+  function buildFavoritePriceContext(item) {
+    const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
+    const parseMoneyLoose = window.CotoSorter?.priceUtils?.parseMoneyLoose || ((value) => Number(value));
+
+    const referencePrice = Number.isFinite(Number(item?.referencePrice))
+      ? Number(item.referencePrice)
+      : Number.isFinite(Number(item?.lastSeenRegularPrice))
+      ? Number(item.lastSeenRegularPrice)
+      : Number.isFinite(parseMoneyLoose(item?.priceText))
+      ? parseMoneyLoose(item.priceText)
+      : null;
+
+    const displayedPrice = Number.isFinite(Number(item?.promoPriceRaw))
+      ? Number(item.promoPriceRaw)
+      : Number.isFinite(Number(item?.activePrice))
+      ? Number(item.activePrice)
+      : Number.isFinite(Number(item?.lastSeenDisplayedPrice))
+      ? Number(item.lastSeenDisplayedPrice)
+      : Number.isFinite(parseMoneyLoose(item?.discountedPriceText))
+      ? parseMoneyLoose(item.discountedPriceText)
+      : null;
+
+    const discountRatio = Number.isFinite(Number(item?.discountRatio))
+      ? Number(item.discountRatio)
+      : Number.isFinite(Number(item?.lastSeenDiscountRatio))
+      ? Number(item.lastSeenDiscountRatio)
+      : (Number.isFinite(referencePrice) && Number.isFinite(displayedPrice) && referencePrice > 0
+        ? displayedPrice / referencePrice
+        : 1);
+
+    const activePrice = Number.isFinite(Number(item?.activePrice))
+      ? Number(item.activePrice)
+      : Number.isFinite(Number(item?.lastSeenAdjustedUnitPrice))
+      ? Number(item.lastSeenAdjustedUnitPrice)
+      : displayedPrice ?? referencePrice;
+
+    const unitPriceText = item?.unitPriceText != null ? String(item.unitPriceText) : null;
+    const unitType = item?.unitType ? String(item.unitType) : null;
+    const maxFormatPriceRaw = Number.isFinite(Number(item?.maxFormatPriceRaw))
+      ? Number(item.maxFormatPriceRaw)
+      : Number.isFinite(Number(item?.lastSeenAdjustedUnitPrice))
+      ? Number(item.lastSeenAdjustedUnitPrice)
+      : null;
+
+    return {
+      priceText: item?.priceText != null ? String(item.priceText) : (Number.isFinite(referencePrice) ? formatPrice(referencePrice) : null),
+      discountedPriceText: item?.discountedPriceText != null ? String(item.discountedPriceText) : (discountRatio < 0.999 && Number.isFinite(displayedPrice) ? formatPrice(displayedPrice) : null),
+      activePrice,
+      referencePrice: Number.isFinite(referencePrice) ? referencePrice : null,
+      adjustedReferencePrice: Number.isFinite(Number(item?.adjustedReferencePrice))
+        ? Number(item.adjustedReferencePrice)
+        : Number.isFinite(Number(item?.lastSeenAdjustedUnitPrice))
+        ? Number(item.lastSeenAdjustedUnitPrice)
+        : null,
+      discountRatio,
+      promoPriceRaw: Number.isFinite(displayedPrice) ? displayedPrice : null,
+      promoTags: Array.isArray(item?.promoTags) ? item.promoTags.slice() : [],
+      unitPriceText,
+      unitType,
+      badges: Array.isArray(item?.badges) ? item.badges.slice() : [],
+      maxFormatPriceRaw,
+    };
+  }
+
   function canonicalizeProduct(data) {
     if (!data || typeof data !== "object") return null;
 
@@ -41,6 +105,7 @@ window.CotoSorter.productService = (function () {
   function buildFavoriteSnapshot(product, overrides = {}) {
     const normalized = canonicalizeProduct(product);
     if (!normalized) return null;
+    const priceContext = buildFavoritePriceContext({ ...normalized, ...overrides });
 
     return {
       name: overrides.name || normalized.name || overrides.searchTerm || null,
@@ -51,57 +116,38 @@ window.CotoSorter.productService = (function () {
       product_brand: normalized.product_brand || normalized.brand || null,
       href: normalized.href,
       imgSrc: normalized.imgSrc,
-      priceText: normalized.priceText,
-      discountedPriceText: normalized.discountedPriceText,
-      activePrice: normalized.activePrice,
-      referencePrice: normalized.referencePrice,
-      adjustedReferencePrice: normalized.adjustedReferencePrice,
-      discountRatio: normalized.discountRatio,
-      promoPriceRaw: normalized.promoPriceRaw,
-      promoTags: normalized.promoTags.slice(),
-      unitPriceText: normalized.unitPriceText,
-      unitType: normalized.unitType,
-      badges: normalized.badges.slice(),
+      priceText: priceContext.priceText,
+      discountedPriceText: priceContext.discountedPriceText,
+      activePrice: priceContext.activePrice,
+      referencePrice: priceContext.referencePrice,
+      adjustedReferencePrice: priceContext.adjustedReferencePrice,
+      discountRatio: priceContext.discountRatio,
+      promoPriceRaw: priceContext.promoPriceRaw,
+      promoTags: priceContext.promoTags.slice(),
+      unitPriceText: priceContext.unitPriceText,
+      unitType: priceContext.unitType,
+      badges: priceContext.badges.slice(),
       lastCheckedAt: Number.isFinite(Number(overrides.lastCheckedAt)) ? Number(overrides.lastCheckedAt) : Date.now(),
-      lastSeenDisplayedPrice: toNumber(overrides.lastSeenDisplayedPrice),
-      lastSeenRegularPrice: toNumber(overrides.lastSeenRegularPrice),
-      lastSeenAdjustedUnitPrice: toNumber(overrides.lastSeenAdjustedUnitPrice),
-      lastSeenDiscountRatio: Number.isFinite(Number(overrides.lastSeenDiscountRatio)) ? Number(overrides.lastSeenDiscountRatio) : normalized.discountRatio,
-      maxFormatPriceRaw: normalized.maxFormatPriceRaw,
+      lastSeenDisplayedPrice: toNumber(overrides.lastSeenDisplayedPrice) ?? priceContext.activePrice,
+      lastSeenRegularPrice: toNumber(overrides.lastSeenRegularPrice) ?? priceContext.referencePrice,
+      lastSeenAdjustedUnitPrice: toNumber(overrides.lastSeenAdjustedUnitPrice) ?? priceContext.adjustedReferencePrice,
+      lastSeenDiscountRatio: Number.isFinite(Number(overrides.lastSeenDiscountRatio)) ? Number(overrides.lastSeenDiscountRatio) : priceContext.discountRatio,
+      maxFormatPriceRaw: priceContext.maxFormatPriceRaw,
     };
   }
 
   function buildFavoritePriceMeta(item) {
     const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
-    const parseMoneyLoose = window.CotoSorter?.priceUtils?.parseMoneyLoose || ((value) => Number(value));
-
-    const regularPrice = Number.isFinite(Number(item?.referencePrice))
-      ? Number(item.referencePrice)
-      : Number.isFinite(Number(item?.lastSeenRegularPrice))
-      ? Number(item.lastSeenRegularPrice)
-      : Number.isFinite(parseMoneyLoose(item?.priceText))
-      ? parseMoneyLoose(item.priceText)
+    const priceContext = buildFavoritePriceContext(item);
+    const priceUtils = window.CotoSorter?.priceUtils;
+    const resolved = priceUtils && typeof priceUtils.resolveDisplayPrices === "function"
+      ? priceUtils.resolveDisplayPrices(priceContext)
       : null;
 
-    const discountedPrice = Number.isFinite(Number(item?.promoPriceRaw))
-      ? Number(item.promoPriceRaw)
-      : Number.isFinite(parseMoneyLoose(item?.discountedPriceText))
-      ? parseMoneyLoose(item.discountedPriceText)
-      : Number.isFinite(Number(item?.lastSeenDisplayedPrice))
-      ? Number(item.lastSeenDisplayedPrice)
-      : null;
-
-    const discountRatio = Number.isFinite(Number(item?.discountRatio))
-      ? Number(item.discountRatio)
-      : Number.isFinite(Number(item?.lastSeenDiscountRatio))
-      ? Number(item.lastSeenDiscountRatio)
-      : null;
-
-    const actualPrice = Number.isFinite(Number(item?.activePrice))
-      ? Number(item.activePrice)
-      : Number.isFinite(Number(item?.lastSeenAdjustedUnitPrice))
-      ? Number(item.lastSeenAdjustedUnitPrice)
-      : discountedPrice ?? regularPrice;
+    const regularPrice = Number.isFinite(priceContext.referencePrice) ? priceContext.referencePrice : null;
+    const discountedPrice = Number.isFinite(priceContext.promoPriceRaw) ? priceContext.promoPriceRaw : null;
+    const discountRatio = Number.isFinite(priceContext.discountRatio) ? priceContext.discountRatio : null;
+    const actualPrice = Number.isFinite(priceContext.activePrice) ? priceContext.activePrice : null;
 
     const checkedAtValue = Number(item?.lastCheckedAt);
     const checkedAt = Number.isFinite(checkedAtValue) && checkedAtValue > 0
@@ -113,7 +159,7 @@ window.CotoSorter.productService = (function () {
       : null;
 
     const hasSnapshot = !!checkedAt || regularPrice !== null || discountedPrice !== null || actualPrice !== null;
-    const hasDiscount = Number.isFinite(discountRatio) && discountRatio > 0 && discountRatio < 0.999;
+    const hasDiscount = resolved ? !!resolved.hasDiscount : (Number.isFinite(discountRatio) && discountRatio > 0 && discountRatio < 0.999);
     const discountPct = hasDiscount ? Math.max(1, Math.round((1 - discountRatio) * 100)) : 0;
     const lastPriceValue = hasDiscount
       ? (discountedPrice ?? actualPrice ?? regularPrice)
@@ -145,7 +191,7 @@ window.CotoSorter.productService = (function () {
       lastPriceState,
       todayPriceState,
       tooltipLines,
-      visibleLabel: "Prices",
+      visibleLabel: "Precio",
     };
   }
 
@@ -177,6 +223,7 @@ window.CotoSorter.productService = (function () {
 
     const nameEl = productEl.querySelector(".nombre-producto, h3, h4.card-title, .card-title");
     const hrefEl = productEl.querySelector("a[href]");
+
     const imgEl = productEl.querySelector("img");
 
     return canonicalizeProduct({
@@ -207,9 +254,20 @@ window.CotoSorter.productService = (function () {
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
 
-      const productEl = doc.querySelector(".producto-card, [data-cnstrc-item-price], .card-container");
-      const product = normalizeProductFromDomElement(productEl);
-      return product ? [product] : [];
+      // Parse all product cards from the fetched page, not just the first one.
+      const elements = Array.from(doc.querySelectorAll(".producto-card, .card-container, [data-cnstrc-item-price]"));
+      const unique = [];
+      const seen = new Set();
+
+      for (const el of elements) {
+        const card = el.closest(".producto-card, .card-container") || el;
+        if (!card || seen.has(card)) continue;
+        seen.add(card);
+        const product = normalizeProductFromDomElement(card);
+        if (product) unique.push(product);
+      }
+
+      return unique;
     } catch (err) {
       console.debug("productService: dom parse failed", err?.message || err);
       return [];

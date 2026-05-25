@@ -237,10 +237,10 @@
 
 .coto-sorter-fav-price-block {
   display: grid;
-  gap: 3px;
-  margin-top: 4px;
-  padding: 6px 8px;
-  border-radius: 12px;
+  gap: 2px;
+  margin-top: 3px;
+  padding: 5px 7px;
+  border-radius: 10px;
   border: 1px solid #ead7cf;
   background: linear-gradient(180deg, #fffaf7 0%, #fff 100%);
   cursor: help;
@@ -248,17 +248,37 @@
   isolation: isolate;
 }
 
+.coto-sorter-fav-price-block.is-discount {
+  border-color: #b8e4c5;
+  background: linear-gradient(180deg, #eefcf2 0%, #f8fffa 100%);
+}
+
+.coto-sorter-fav-price-block.is-pending {
+  border-color: #b9d7ff;
+  background: linear-gradient(180deg, #eef5ff 0%, #f7fbff 100%);
+}
+
+.coto-sorter-fav-row-discount {
+  background: #f3fff7;
+  border-color: #c8ebd2;
+}
+
+.coto-sorter-fav-row-pending {
+  background: #f2f7ff;
+  border-color: #c6dbff;
+}
+
 .coto-sorter-fav-price-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
   color: #8a6d62;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .coto-sorter-fav-price-state {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: #5b4a43;
   line-height: 1.25;
 }
@@ -304,7 +324,20 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  margin-top: 2px;
+  margin-top: 1px;
+  padding: 1px 6px;
+  font-size: 9px;
+}
+
+.coto-sorter-fav-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 1px;
+  padding: 1px 6px;
+  font-size: 9px;
+  background: #2f7ddf;
+  color: #fff;
 }
 
 .coto-sorter-fav-price-hover {
@@ -530,4 +563,20 @@
 .coto-sorter-shopping-close {
   width: auto;
   justify-self: end;
+}
+
+.coto-sorter-shopping-single-vista {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #5b4a43;
+}
+
+.coto-sorter-shopping-verify-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }

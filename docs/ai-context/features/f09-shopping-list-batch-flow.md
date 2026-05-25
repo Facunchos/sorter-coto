@@ -36,11 +36,13 @@
 4. Clicking a saved manual list loads its name and text back into the same editor.
 5. Saving with the same loaded name updates that list; changing the name creates a new saved list entry.
 6. Favorites and saved manual lists each expose their own checkboxes so the user can select favorites, lists, or both.
+	- The modal `Seleccionar todo` / `Deseleccionar todo` actions are scoped to the currently active tab (i.e. they only affect the visible tab: `Listas Manuales` or `Favoritos Guardados`).
 7. The launcher expands selected manual lists into individual search items, one per line.
 8. For each item, the launcher opens a new search tab with a hash marker.
 9. The opened tab waits for product cards to appear instead of relying on a blind one-shot timeout.
 10. If the hash marker is present, the tab uses a per-tab `sessionStorage` key to avoid duplicate runs.
 11. Once the target page is ready, the tab runs the existing Vista Ligera generation flow for that search result page.
+12. New option: the modal exposes a `Unir en una sola Vista Ligera` checkbox. When enabled, the launcher will aggregate product results for all selected searches (using `productService.extractProductsFromPageUrl`) and produce a single combined Vista Ligera page instead of launching a Vista Ligera per search tab.
 12. After launching Vista Ligera, the search tab closes itself so only the result tab stays open.
 13. Temporary state is kept local to the tab and not shared across other tabs.
 14. Favorite rows can be edited or removed directly from the modal, with basic validation on the edited name.
@@ -86,6 +88,8 @@
 - Favorite rows show only the editable name, without duplicating the name in a secondary line.
 - Favorite rows now render a `Prices` summary block with Vista Ligera-style regular/discount price classes and a custom hover card that shows the last verification date plus regular, discounted, discount-state, and actual price snapshots.
 - Favorite price snapshots prefer the same Vista Ligera keys used by generated cards (`priceText`, `discountedPriceText`, `activePrice`, `referencePrice`, `adjustedReferencePrice`, `discountRatio`, `promoPriceRaw`, `promoTags`) and fall back to legacy `lastSeen*` fields when needed.
+- Favorite rows now highlight state by verification result: discount matches render in light green with discount badge, and non-verified entries show a blue `Pending` badge.
+- The `Unir en una sola Vista Ligera` checkbox is rendered on the same bottom action row as `Verificar favoritos`.
 
 ## Planned Favorite Price Scan
 - Add a favorites-only action button that scans each selected favorite one at a time.
@@ -95,6 +99,14 @@
 - Keep the search/check flow isolated from the manual-lists batch launcher so the two workflows stay independent.
 - Prefer reusing the existing badge extraction logic instead of duplicating DOM parsing in the new scan action.
 	- Implementation note: `productService.extractProductsFromPageUrl` will attempt the API scrape first, then fall back to DOM parsing via `badges.extractProductData` to keep a single fallback path.
+
+## Implemented Favorite Verification Tab Flow
+- `Verificar favoritos` now opens search tabs with a dedicated hash marker (`coto-sorter-verify-fav=<favoriteId>`).
+- Each verification tab auto-runs from `shoppingList.maybeAutoRunBatch()` when the hash marker is detected.
+- The tab waits for product cards, enters the shared tab queue lock, resolves the matching product for that favorite, updates favorite snapshot fields, and closes itself.
+- Verifications are launched in paced order from the modal and are serialized by the shared queue lock to avoid concurrent race conditions.
+- If favorites are selected in the modal, only selected favorites are launched; otherwise all favorites are launched.
+- Manual-list saves now update an existing list when the current name matches a stored list name, even if that list is not currently selected in the editor.
 
 ## Edit Impact Checklist
 - If tab orchestration changes, review `features/f07-ui-panel-actions.md`.

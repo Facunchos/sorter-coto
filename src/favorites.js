@@ -83,10 +83,27 @@ window.CotoSorter.favorites = (function () {
   }
 
   function normalizeFavorite(data) {
+    const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
     const name = String(data?.name || data?.searchTerm || "").trim();
     const note = String(data?.writtenText || data?.searchTerm || "").trim();
-    const priceText = data?.priceText != null ? String(data.priceText) : null;
-    const discountedPriceText = data?.discountedPriceText != null ? String(data.discountedPriceText) : null;
+    const referencePrice = Number.isFinite(Number(data?.referencePrice)) ? Number(data.referencePrice) : null;
+    const activePrice = Number.isFinite(Number(data?.activePrice)) ? Number(data.activePrice) : null;
+    const lastSeenRegularPrice = Number.isFinite(Number(data?.lastSeenRegularPrice)) ? Number(data.lastSeenRegularPrice) : null;
+    const lastSeenDisplayedPrice = Number.isFinite(Number(data?.lastSeenDisplayedPrice)) ? Number(data.lastSeenDisplayedPrice) : null;
+    const priceText = data?.priceText != null
+      ? String(data.priceText)
+      : (lastSeenRegularPrice != null
+        ? formatPrice(lastSeenRegularPrice)
+        : referencePrice != null
+        ? formatPrice(referencePrice)
+        : null);
+    const discountedPriceText = data?.discountedPriceText != null
+      ? String(data.discountedPriceText)
+      : (lastSeenDisplayedPrice != null
+        ? formatPrice(lastSeenDisplayedPrice)
+        : activePrice != null
+        ? formatPrice(activePrice)
+        : null);
 
     if (!name) return null;
 
@@ -101,8 +118,8 @@ window.CotoSorter.favorites = (function () {
       imgSrc: data?.imgSrc ? String(data.imgSrc) : null,
       priceText,
       discountedPriceText,
-      activePrice: Number.isFinite(Number(data?.activePrice)) ? Number(data.activePrice) : null,
-      referencePrice: Number.isFinite(Number(data?.referencePrice)) ? Number(data.referencePrice) : null,
+      activePrice,
+      referencePrice,
       adjustedReferencePrice: Number.isFinite(Number(data?.adjustedReferencePrice)) ? Number(data.adjustedReferencePrice) : null,
       discountRatio: Number.isFinite(Number(data?.discountRatio)) ? Number(data.discountRatio) : 1,
       promoPriceRaw: Number.isFinite(Number(data?.promoPriceRaw)) ? Number(data.promoPriceRaw) : null,
@@ -110,8 +127,8 @@ window.CotoSorter.favorites = (function () {
       unitPriceText: data?.unitPriceText != null ? String(data.unitPriceText) : null,
       unitType: data?.unitType ? String(data.unitType) : null,
       // Optional last-seen price snapshot fields (may be undefined)
-      lastSeenDisplayedPrice: Number.isFinite(Number(data?.lastSeenDisplayedPrice)) ? Number(data.lastSeenDisplayedPrice) : null,
-      lastSeenRegularPrice: Number.isFinite(Number(data?.lastSeenRegularPrice)) ? Number(data.lastSeenRegularPrice) : null,
+      lastSeenDisplayedPrice: lastSeenDisplayedPrice != null ? lastSeenDisplayedPrice : activePrice,
+      lastSeenRegularPrice: lastSeenRegularPrice != null ? lastSeenRegularPrice : referencePrice,
       lastSeenAdjustedUnitPrice: Number.isFinite(Number(data?.lastSeenAdjustedUnitPrice)) ? Number(data.lastSeenAdjustedUnitPrice) : null,
       lastSeenDiscountRatio: Number.isFinite(Number(data?.lastSeenDiscountRatio)) ? Number(data.lastSeenDiscountRatio) : 1,
       lastCheckedAt: Number(data?.lastCheckedAt) || null,

@@ -113,7 +113,11 @@ window.CotoSorter.tabRunner = (function () {
     for (const item of items) {
       try {
         if (!item || !item.url) continue;
-        window.open(item.url, "_blank");
+        const opened = window.open(item.url, "_blank", "noopener,noreferrer");
+        // Best-effort: avoid requesting focus back; some browsers still focus the new tab.
+        if (opened && typeof opened.blur === "function") {
+          try { opened.blur(); } catch { /* ignore */ }
+        }
       } catch (err) {
         // ignore per-item errors
         console.debug("tabRunner: open failed", err?.message || err);
