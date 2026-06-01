@@ -11,6 +11,49 @@ window.CotoSorter.api = (function () {
   const ENDeca_PARALLEL = 3;
   const BFF_PARALLEL = 6;
 
+  // --- Fetch helpers with retry/backoff ---
+  async function sleep(ms) { return new Promise((res) => setTimeout(res, ms)); }
+
+  async function fetchJsonWithRetry(url, options = {}, attempts = 3, backoffMs = 300) {
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const resp = await fetch(url, options);
+        if (!resp) throw new Error("No response");
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        return data;
+      } catch (err) {
+        lastErr = err;
+        const next = backoffMs * Math.pow(2, i) + Math.floor(Math.random() * 100);
+        debugLog(`api: JSON fetch attempt ${i + 1}/${attempts} failed`, url, err?.message || err, `retry in ${next}ms`);
+        if (i < attempts - 1) await sleep(next);
+      }
+    }
+    debugLog(`api: JSON fetch failed after ${attempts} attempts`, url, lastErr?.message || lastErr);
+    throw lastErr;
+  }
+
+  async function fetchTextWithRetry(url, options = {}, attempts = 2, backoffMs = 200) {
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const resp = await fetch(url, options);
+        if (!resp) throw new Error("No response");
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        return text;
+      } catch (err) {
+        lastErr = err;
+        const next = backoffMs * Math.pow(2, i) + Math.floor(Math.random() * 50);
+        debugLog(`api: text fetch attempt ${i + 1}/${attempts} failed`, url, err?.message || err, `retry in ${next}ms`);
+        if (i < attempts - 1) await sleep(next);
+      }
+    }
+    debugLog(`api: text fetch failed after ${attempts} attempts`, url, lastErr?.message || lastErr);
+    throw lastErr;
+  }
+
   let capturedEndecaUrl = null;
   let capturedBffUrl = null;
 
@@ -475,6 +518,9 @@ window.CotoSorter.api = (function () {
       unitType,
       activePrice,
       referencePrice,
+      productListPrice: (numOrZero(data.product_list_price) ? numOrZero(data.product_list_price) / 100 : null) || null,
+      product_list_price: (numOrZero(data.product_list_price) ? numOrZero(data.product_list_price) / 100 : null) || null,
+      priceWithoutTax: minPrice > 0 ? minPrice : null,
       adjustedReferencePrice,
       discountRatio,
       promoPriceRaw: promoPrice > 0 ? promoPrice : null,
@@ -635,10 +681,7 @@ window.CotoSorter.api = (function () {
     const firstUrl = buildEndecaApiUrl(0, ENDeca_BATCH);
     debugLog(`Endeca URL: ${firstUrl}`);
 
-    const firstResp = await fetch(firstUrl, { credentials: "same-origin" });
-    if (!firstResp.ok) throw new Error(`Endeca API error ${firstResp.status}`);
-
-    const firstData = await firstResp.json();
+    const firstData = await fetchJsonWithRetry(firstUrl, { credentials: "same-origin" });
     const resultsList = findResultsList(firstData);
     if (!resultsList) {
       throw new Error("Endeca response sin Category_ResultsList");
@@ -661,10 +704,12 @@ window.CotoSorter.api = (function () {
         group.map(async (offset) => {
           const url = buildEndecaApiUrl(offset, ENDeca_BATCH);
           debugLog(`Fetching Endeca offset ${offset}: ${url}`);
-          const resp = await fetch(url, { credentials: "same-origin" });
-          if (!resp.ok) throw new Error(`Endeca API error ${resp.status} at offset ${offset}`);
-          const data = await resp.json();
-          return extractProductsFromResultsList(findResultsList(data));
+          try {
+            const data = await fetchJsonWithRetry(url, { credentials: "same-origin" });
+            return extractProductsFromResultsList(findResultsList(data));
+          } catch (e) {
+            throw new Error(`Endeca API error at offset ${offset}: ${e?.message || e}`);
+          }
         })
       );
 
@@ -700,10 +745,7 @@ window.CotoSorter.api = (function () {
     debugLog(`BFF template detected: ${baseUrl}`);
     debugLog(`Fetching BFF page 1: ${firstUrl}`);
 
-    const firstResp = await fetch(firstUrl, { credentials: "same-origin" });
-    if (!firstResp.ok) throw new Error(`BFF API error ${firstResp.status}`);
-
-    const firstData = await firstResp.json();
+    const firstData = await fetchJsonWithRetry(firstUrl, { credentials: "same-origin" });
     if (!isValidBffResponse(firstData)) {
       throw new Error("BFF response inválida: falta response.results");
     }
@@ -725,13 +767,15 @@ window.CotoSorter.api = (function () {
         group.map(async (page) => {
           const url = buildBffPageUrl(baseUrl, page, nrpp);
           debugLog(`Fetching BFF page ${page}: ${url}`);
-          const resp = await fetch(url, { credentials: "same-origin" });
-          if (!resp.ok) throw new Error(`BFF API error ${resp.status} at page ${page}`);
-          const data = await resp.json();
-          if (!isValidBffResponse(data)) {
-            throw new Error(`BFF response inválida en page ${page}: falta response.results`);
+          try {
+            const data = await fetchJsonWithRetry(url, { credentials: "same-origin" });
+            if (!isValidBffResponse(data)) {
+              throw new Error(`BFF response inválida en page ${page}: falta response.results`);
+            }
+            return extractProductsFromBffResponse(data);
+          } catch (e) {
+            throw new Error(`BFF API error at page ${page}: ${e?.message || e}`);
           }
-          return extractProductsFromBffResponse(data);
         })
       );
 
@@ -766,10 +810,7 @@ window.CotoSorter.api = (function () {
       throw new Error("No se pudo construir la URL Endeca desde la página indicada.");
     }
 
-    const firstResp = await fetch(firstUrl, { credentials: "same-origin" });
-    if (!firstResp.ok) throw new Error(`Endeca API error ${firstResp.status}`);
-
-    const firstData = await firstResp.json();
+    const firstData = await fetchJsonWithRetry(firstUrl, { credentials: "same-origin" });
     const resultsList = findResultsList(firstData);
     if (!resultsList) {
       throw new Error("La respuesta no contiene Category_ResultsList.");
@@ -792,10 +833,12 @@ window.CotoSorter.api = (function () {
         group.map(async (offset) => {
           const url = buildEndecaApiUrlFromPageUrl(pageUrl, offset, ENDeca_BATCH);
           if (!url) return [];
-          const resp = await fetch(url, { credentials: "same-origin" });
-          if (!resp.ok) throw new Error(`Endeca API error ${resp.status} at offset ${offset}`);
-          const data = await resp.json();
-          return extractProductsFromResultsList(findResultsList(data));
+          try {
+            const data = await fetchJsonWithRetry(url, { credentials: "same-origin" });
+            return extractProductsFromResultsList(findResultsList(data));
+          } catch (e) {
+            throw new Error(`Endeca API error at offset ${offset}: ${e?.message || e}`);
+          }
         })
       );
 
@@ -806,5 +849,5 @@ window.CotoSorter.api = (function () {
     return allProducts;
   }
 
-  return { setupApiUrlCapture, scrapeAllPages, scrapeProductsFromPageUrl };
+  return { setupApiUrlCapture, scrapeAllPages, scrapeProductsFromPageUrl, fetchJsonWithRetry, fetchTextWithRetry };
 })();

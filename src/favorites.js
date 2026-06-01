@@ -84,6 +84,7 @@ window.CotoSorter.favorites = (function () {
 
   function normalizeFavorite(data) {
     const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
+    const productService = window.CotoSorter?.productService;
     const name = String(data?.name || data?.searchTerm || "").trim();
     const note = String(data?.writtenText || data?.searchTerm || "").trim();
     const referencePrice = Number.isFinite(Number(data?.referencePrice)) ? Number(data.referencePrice) : null;
@@ -107,14 +108,38 @@ window.CotoSorter.favorites = (function () {
 
     if (!name) return null;
 
+    const sharedSnapshot = productService && typeof productService.buildFavoriteSnapshot === "function"
+      ? productService.buildFavoriteSnapshot(data, {
+          name,
+          searchTerm: String(data?.searchTerm || note || name).trim(),
+          writtenText: note,
+          brand: data?.brand ? String(data.brand) : null,
+          lastCheckedAt: Number(data?.lastCheckedAt) || null,
+          lastSeenDisplayedPrice: lastSeenDisplayedPrice != null ? lastSeenDisplayedPrice : activePrice,
+          lastSeenRegularPrice: lastSeenRegularPrice != null ? lastSeenRegularPrice : referencePrice,
+          lastSeenAdjustedUnitPrice: Number.isFinite(Number(data?.lastSeenAdjustedUnitPrice)) ? Number(data.lastSeenAdjustedUnitPrice) : null,
+          lastSeenDiscountRatio: Number.isFinite(Number(data?.lastSeenDiscountRatio)) ? Number(data.lastSeenDiscountRatio) : 1,
+        })
+      : null;
+
+    const sharedLastCheckedAt = sharedSnapshot?.lastCheckedAt != null ? Number(sharedSnapshot.lastCheckedAt) : Number(data?.lastCheckedAt) || null;
+
+    let safeHref = null;
+    try {
+      if (data?.href) safeHref = new URL(String(data.href), window.location.origin).toString();
+    } catch {
+      safeHref = data?.href ? String(data.href) : null;
+    }
+
     return {
       id: String(data?.id || buildFavoriteId(data)),
+      ...(sharedSnapshot || {}),
       name,
       searchTerm: String(data?.searchTerm || note || name).trim(),
       writtenText: note,
       createdAt: Number(data?.createdAt) || Date.now(),
       brand: data?.brand ? String(data.brand) : null,
-      href: data?.href ? String(data.href) : null,
+      href: safeHref,
       imgSrc: data?.imgSrc ? String(data.imgSrc) : null,
       priceText,
       discountedPriceText,
@@ -131,7 +156,7 @@ window.CotoSorter.favorites = (function () {
       lastSeenRegularPrice: lastSeenRegularPrice != null ? lastSeenRegularPrice : referencePrice,
       lastSeenAdjustedUnitPrice: Number.isFinite(Number(data?.lastSeenAdjustedUnitPrice)) ? Number(data.lastSeenAdjustedUnitPrice) : null,
       lastSeenDiscountRatio: Number.isFinite(Number(data?.lastSeenDiscountRatio)) ? Number(data.lastSeenDiscountRatio) : 1,
-      lastCheckedAt: Number(data?.lastCheckedAt) || null,
+      lastCheckedAt: sharedLastCheckedAt,
     };
   }
 

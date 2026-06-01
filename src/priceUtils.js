@@ -90,9 +90,11 @@ window.CotoSorter.priceUtils = (function () {
     const promoFromDiscountedText = parseMoneyLoose(product?.discountedPriceText);
     const unitParsed = parseUnitPrice(product?.unitPriceText);
     const hasPromoEvidence = getMeaningfulPromoTokens(product).length > 0;
+    const hasNumericPromoEvidence = [promoFromRaw, promoFromDiscountedText, Number(product?.activePrice), Number(product?.lastSeenDisplayedPrice)]
+      .some((candidate) => Number.isFinite(candidate) && candidate > 0 && Number.isFinite(regularPrice) && regularPrice > 0 && candidate < regularPrice);
 
     let promoPrice = NaN;
-    if (hasPromoEvidence) {
+    if (hasPromoEvidence || hasNumericPromoEvidence) {
       const promoCandidates = [promoFromRaw, promoFromDiscountedText];
       for (const candidate of promoCandidates) {
         if (!Number.isFinite(candidate) || candidate <= 0) continue;
@@ -104,7 +106,7 @@ window.CotoSorter.priceUtils = (function () {
       }
     }
 
-    if (hasPromoEvidence && !Number.isFinite(promoPrice) && Number.isFinite(regularPrice) && regularPrice > 0) {
+    if ((hasPromoEvidence || hasNumericPromoEvidence) && !Number.isFinite(promoPrice) && Number.isFinite(regularPrice) && regularPrice > 0) {
       const inferredRatio = inferPromoRatio(product);
       if (Number.isFinite(inferredRatio) && inferredRatio > 0 && inferredRatio < 1) {
         promoPrice = regularPrice * inferredRatio;

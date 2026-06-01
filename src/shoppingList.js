@@ -15,6 +15,7 @@ window.CotoSorter.shoppingList = (function () {
   const BATCH_QUEUE_KEY = "cotoSorterBatchQueueV1";
   const BATCH_LOCK_KEY = "cotoSorterBatchLockV1";
   const OVERLAY_CLASS = "coto-sorter-shopping-overlay";
+  let favoritesStorageListener = null;
 
   function toSlug(value) {
     return window.CotoSorter.utils.slugify(value);
@@ -37,6 +38,17 @@ window.CotoSorter.shoppingList = (function () {
     return `${window.location.origin}/sitios/cdigi/productos/${slug}`;
   }
 
+  function normalizeDirectHref(href) {
+    const raw = String(href || "").trim();
+    if (!raw) return null;
+
+    try {
+      return new URL(raw, window.location.origin).toString();
+    } catch {
+      return null;
+    }
+  }
+
   function buildBatchUrl(item) {
     const url = buildSearchUrl(item.searchTerm || item.name);
     if (!url) return null;
@@ -45,10 +57,17 @@ window.CotoSorter.shoppingList = (function () {
   }
 
   function buildFavoriteVerifyUrl(favorite) {
-    const url = buildSearchUrl(favorite?.searchTerm || favorite?.name);
-    if (!url) return null;
     const favoriteId = encodeURIComponent(String(favorite?.id || ""));
     if (!favoriteId) return null;
+    const url = normalizeDirectHref(favorite?.href);
+    if (!url) return null;
+
+    debugLog("Favorite verify URL built", {
+      favoriteId: String(favorite?.id || ""),
+      source: "direct-href",
+      url,
+    });
+
     return `${url}#${VERIFY_HASH_KEY}=${favoriteId}`;
   }
 
@@ -69,6 +88,10 @@ window.CotoSorter.shoppingList = (function () {
 
   function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function isFavoriteVerifyPageReady() {
+    return document.querySelectorAll(".producto-card").length > 0 || !!document.querySelector("[data-cnstrc-product-detail]");
   }
 
   function readJsonStorage(key, fallback) {
@@ -116,7 +139,55 @@ window.CotoSorter.shoppingList = (function () {
   }
 
   async function maybeAutoRunBatch() {
-    const verifyFavoriteId = getVerifyFavoriteIdFromLocation();
+    let verifyFavoriteId = getVerifyFavoriteIdFromLocation();
+    let verifySource = verifyFavoriteId ? 'hash' : null;
+    if (!verifyFavoriteId) {
+      try {
+        const pending = localStorage.getItem('cotoSorterPendingVerify');
+        if (pending) {
+          verifyFavoriteId = String(pending);
+          verifySource = 'localstorage';
+          // clear key so subsequent tabs don't pick it up
+          try { localStorage.removeItem('cotoSorterPendingVerify'); } catch (e) { /* ignore */ }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    if (!verifyFavoriteId) {
+      try {
+        const queue = readBatchQueue();
+        const queuedItemId = queue[0] ? String(queue[0]) : "";
+        if (queuedItemId.startsWith("verify:")) {
+          verifyFavoriteId = queuedItemId.replace(/^verify:/, "");
+          verifySource = 'batch-queue';
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    // If still no verify id, try to map current URL to a queued batch item saved by tabRunner
+    if (!verifyFavoriteId) {
+      try {
+        const raw = localStorage.getItem('cotoSorterBatchItemsV1');
+        if (raw) {
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            const current = String(window.location.href).split('#')[0];
+            const found = items.find((it) => String(it?.url || '').split('#')[0] === current);
+            if (found && found.id) {
+              verifyFavoriteId = String(found.id);
+              verifySource = 'batch-items';
+            }
+          }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
     if (verifyFavoriteId) {
       const verifySessionKey = VERIFY_SESSION_PREFIX + verifyFavoriteId;
       if (sessionStorage.getItem(verifySessionKey) === "started") {
@@ -124,11 +195,31 @@ window.CotoSorter.shoppingList = (function () {
       }
 
       sessionStorage.setItem(verifySessionKey, "started");
-      debugLog("Favorite verify tab detected; waiting for search results", verifyFavoriteId);
+      debugLog("Favorite verify tab detected", {
+        verifyFavoriteId,
+        verifySource,
+        url: window.location.href,
+        pageType: document.querySelector("[data-cnstrc-product-detail]") ? "product-detail" : "search-results",
+      });
 
-      const hasProducts = await waitForProducts(15000);
+      const hasProducts = await (async () => {
+        const limit = 15000;
+        const startedAt = Date.now();
+
+        while (Date.now() - startedAt < limit) {
+          if (isFavoriteVerifyPageReady()) {
+            return true;
+          }
+          await wait(250);
+        }
+
+        return false;
+      })();
       if (!hasProducts) {
-        debugLog("Favorite verify tab finished waiting without products", verifyFavoriteId);
+        debugLog("Favorite verify tab finished waiting without a usable page", {
+          verifyFavoriteId,
+          url: window.location.href,
+        });
         setTimeout(() => {
           try { if (!window.closed) window.close(); } catch (e) { /* ignore */ }
         }, 500);
@@ -179,18 +270,23 @@ window.CotoSorter.shoppingList = (function () {
           return true;
         }
 
-        const svc = window.CotoSorter?.productService;
-        let products = [];
-        if (svc && typeof svc.extractProductsFromPageUrl === "function") {
-          products = await svc.extractProductsFromPageUrl(window.location.href);
-        } else {
-          const apiModule = window.CotoSorter?.api;
-          if (apiModule && typeof apiModule.scrapeProductsFromPageUrl === "function") {
-            products = await apiModule.scrapeProductsFromPageUrl(window.location.href);
-          }
-        }
+        debugLog("Favorite verify tab loaded favorite", {
+          verifyFavoriteId,
+          favoriteHref: favorite.href || null,
+          favoriteName: favorite.name || favorite.searchTerm || null,
+          pageUrl: window.location.href,
+        });
 
-        const matched = pickMatchingProduct(favorite, products || []);
+        const svc = window.CotoSorter?.productService;
+        const matched = svc && typeof svc.resolveFavoriteProductFromPageUrl === "function"
+          ? await svc.resolveFavoriteProductFromPageUrl(window.location.href, favorite)
+          : null;
+        debugLog("Favorite verify tab resolve result", {
+          verifyFavoriteId,
+          matched: !!matched,
+          matchedName: matched?.name || null,
+          matchedHref: matched?.href || null,
+        });
         const svcPatch = window.CotoSorter?.productService?.buildFavoriteSnapshot;
         if (matched && typeof svcPatch === "function") {
           const patch = svcPatch(matched, {
@@ -202,19 +298,41 @@ window.CotoSorter.shoppingList = (function () {
           if (patch) {
             await favorites.updateFavorite(favorite.id, patch);
             debugLog("Favorite verify tab updated favorite", favorite.id);
+          } else {
+            debugLog("Favorite verify tab produced no snapshot patch", {
+              verifyFavoriteId,
+              matchedName: matched?.name || null,
+            });
           }
         } else {
           debugLog("Favorite verify tab found no product match", verifyFavoriteId);
         }
       } catch (err) {
-        debugLog("Favorite verify tab failed", err?.message || err);
+        debugLog("Favorite verify tab failed", {
+          verifyFavoriteId,
+          url: window.location.href,
+          message: err?.message || String(err),
+          stack: err?.stack || null,
+        });
       } finally {
+        let nextTab = null;
         try {
           if (runner && typeof runner.releaseBatchTurn === "function") {
-            runner.releaseBatchTurn(turnKey);
+            nextTab = runner.releaseBatchTurn(turnKey);
           }
         } catch (e) {
           /* ignore */
+        }
+
+        if (nextTab && nextTab.url) {
+          try {
+            const opened = window.open(nextTab.url, "_blank", "noopener,noreferrer");
+            if (opened && typeof opened.blur === "function") {
+              try { opened.blur(); } catch (e) { /* ignore */ }
+            }
+          } catch (err) {
+            debugLog("Favorite verify tab could not open next queued tab", err?.message || err);
+          }
         }
 
         setTimeout(() => {
@@ -318,11 +436,24 @@ window.CotoSorter.shoppingList = (function () {
       debugLog("Batch tab launching Vista Ligera", itemId);
       await revistaModule.startRevistaHTMLGeneration(null, () => {});
     } finally {
+      let nextTab = null;
       if (runner && typeof runner.releaseBatchTurn === "function") {
-        try { runner.releaseBatchTurn(itemId); } catch (e) { /* ignore */ }
+        try { nextTab = runner.releaseBatchTurn(itemId); } catch (e) { /* ignore */ }
       } else {
-        try { releaseBatchTurn(itemId); } catch (e) { /* ignore */ }
+        try { nextTab = releaseBatchTurn(itemId); } catch (e) { /* ignore */ }
       }
+
+      if (nextTab && nextTab.url) {
+        try {
+          const opened = window.open(nextTab.url, "_blank", "noopener,noreferrer");
+          if (opened && typeof opened.blur === "function") {
+            try { opened.blur(); } catch (e) { /* ignore */ }
+          }
+        } catch (err) {
+          debugLog("Batch tab could not open next queued tab", err?.message || err);
+        }
+      }
+
       setTimeout(() => {
         try {
           if (!window.closed) {
@@ -340,14 +471,23 @@ window.CotoSorter.shoppingList = (function () {
   function closeModal() {
     const overlay = document.querySelector("." + OVERLAY_CLASS);
     if (overlay) overlay.remove();
+    if (favoritesStorageListener && chrome?.storage?.onChanged?.removeListener) {
+      try {
+        chrome.storage.onChanged.removeListener(favoritesStorageListener);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    favoritesStorageListener = null;
   }
 
   function createFavoriteRow(item, checked, onEdit, onDelete, onToggleChecked) {
     const row = document.createElement("div");
-    row.className = "coto-sorter-shopping-row";
+    row.className = "coto-sorter-shopping-row coto-sorter-favorite-card";
+    if (checked) row.classList.add("is-selected");
 
     const checkboxWrap = document.createElement("label");
-    checkboxWrap.className = "coto-sorter-shopping-row-check";
+    checkboxWrap.className = "coto-sorter-shopping-row-check coto-sorter-favorite-card-check";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -360,121 +500,53 @@ window.CotoSorter.shoppingList = (function () {
     checkboxWrap.appendChild(checkbox);
 
     const body = document.createElement("div");
-    body.className = "coto-sorter-shopping-row-body";
+    body.className = "coto-sorter-shopping-row-body coto-sorter-favorite-card-body";
 
-    const text = document.createElement("div");
-    text.className = "coto-sorter-shopping-row-text";
-    text.textContent = item.name;
+    const media = document.createElement("div");
+    media.className = "coto-sorter-favorite-card-media";
+
+    const image = document.createElement("img");
+    image.className = "coto-sorter-favorite-card-image";
+    image.alt = item.name || "Favorito";
+    image.loading = "lazy";
+    image.referrerPolicy = "no-referrer";
+    if (item.imgSrc) {
+      image.src = item.imgSrc;
+    } else {
+      image.removeAttribute("src");
+      image.dataset.placeholder = "1";
+    }
 
     const priceMeta = window.CotoSorter?.productService?.buildFavoritePriceMeta
       ? window.CotoSorter.productService.buildFavoritePriceMeta(item)
       : null;
-    const priceBlock = document.createElement("div");
-    priceBlock.className = "coto-sorter-fav-price-block";
-    if (priceMeta?.hasDiscount) {
-      row.classList.add("coto-sorter-fav-row-discount");
-      priceBlock.classList.add("is-discount");
-    } else if (!priceMeta?.hasSnapshot) {
-      row.classList.add("coto-sorter-fav-row-pending");
-      priceBlock.classList.add("is-pending");
-    }
-
-    const priceLabel = document.createElement("div");
-    priceLabel.className = "coto-sorter-fav-price-label";
-    priceLabel.textContent = priceMeta.visibleLabel;
-
-    const priceState = document.createElement("span");
-    priceState.className = "coto-sorter-fav-price-state";
-    priceState.textContent = priceMeta.checkedAt || "Verificación Pending";
 
     const hoverWrap = document.createElement("div");
-    hoverWrap.className = "coto-sorter-fav-price-hover";
+    hoverWrap.className = "coto-sorter-favorite-card-hover";
 
     const hoverTitle = document.createElement("div");
-    hoverTitle.className = "coto-sorter-fav-price-hover-title";
-    hoverTitle.textContent = priceMeta.checkedAt || "Verificación Pending";
+    hoverTitle.className = "coto-sorter-favorite-card-hover-title";
+    hoverTitle.textContent = "Last update:";
 
-    const hoverList = document.createElement("div");
-    hoverList.className = "coto-sorter-fav-price-hover-list";
+    const hoverDate = document.createElement("div");
+    hoverDate.className = "coto-sorter-favorite-card-hover-date";
+    hoverDate.textContent = priceMeta?.checkedAt || "Verificación Pending";
 
-    if (priceMeta.hasSnapshot) {
-      const fields = [
-        ["Precio regular", priceMeta.tooltipLines.regularPrice],
-        ["Descuento", priceMeta.tooltipLines.discountText],
-        ["Precio con descuento", priceMeta.tooltipLines.discountedPrice],
-        ["Precio actual", priceMeta.tooltipLines.actualPrice],
-      ];
+    const hoverStatus = document.createElement("div");
+    hoverStatus.className = "coto-sorter-favorite-card-hover-status";
+    hoverStatus.textContent = priceMeta?.isSameDay
+      ? (priceMeta?.displayPriceText || priceMeta?.currentPriceText || "Verificación Pending")
+      : "Update pending";
+    hoverStatus.classList.add(priceMeta?.isSameDay ? (priceMeta?.displayPriceClass || priceMeta?.currentPriceClass || "price-regular") : "price-pending");
 
-      for (const [label, value] of fields) {
-        const row = document.createElement("div");
-        row.className = "coto-sorter-fav-price-hover-row";
-
-        const rowLabel = document.createElement("span");
-        rowLabel.className = "coto-sorter-fav-price-hover-key";
-        rowLabel.textContent = label;
-
-        const rowValue = document.createElement("span");
-        rowValue.className = "coto-sorter-fav-price-hover-value";
-        rowValue.textContent = value;
-
-        row.appendChild(rowLabel);
-        row.appendChild(rowValue);
-        hoverList.appendChild(row);
-      }
-
-      if (priceMeta.hasDiscount) {
-        const discountBadge = document.createElement("span");
-        discountBadge.className = "badge coto-sorter-fav-discount-badge";
-        discountBadge.textContent = `-${priceMeta.discountPct}%`;
-        priceBlock.appendChild(priceLabel);
-        priceBlock.appendChild(priceState);
-        priceBlock.appendChild(discountBadge);
-      } else {
-        priceBlock.appendChild(priceLabel);
-        priceBlock.appendChild(priceState);
-      }
-    } else {
-      const pendingLine = document.createElement("span");
-      pendingLine.className = "badge coto-sorter-fav-pending-badge";
-      pendingLine.textContent = "Pending";
-      priceBlock.appendChild(priceLabel);
-      priceBlock.appendChild(priceState);
-      priceBlock.appendChild(pendingLine);
+    if (!priceMeta?.isSameDay) {
+      row.classList.add("coto-sorter-fav-row-pending");
+    } else if (priceMeta?.hasDiscount) {
+      row.classList.add("coto-sorter-fav-row-discount");
     }
 
-    const hoverTitleDate = document.createElement("div");
-    hoverTitleDate.className = "coto-sorter-fav-price-hover-date";
-    hoverTitleDate.textContent = priceMeta.tooltipLines.checkedAt;
-
-    const visibleLastLine = document.createElement("div");
-    visibleLastLine.className = "coto-sorter-fav-price-visible-line";
-    visibleLastLine.textContent = "Último precio";
-
-    const visibleLastValue = document.createElement("div");
-    visibleLastValue.className = `coto-sorter-fav-price-visible-value ${priceMeta.lastPriceState}`;
-    visibleLastValue.textContent = priceMeta.lastPriceValue !== null ? window.CotoSorter.utils.formatPrice(priceMeta.lastPriceValue) : "Verificación Pending";
-
-    const visibleTodayLine = document.createElement("div");
-    visibleTodayLine.className = "coto-sorter-fav-price-visible-line is-today";
-    visibleTodayLine.textContent = "Actual";
-
-    const visibleTodayValue = document.createElement("div");
-    visibleTodayValue.className = `coto-sorter-fav-price-visible-value ${priceMeta.todayPriceState}`;
-    visibleTodayValue.textContent = priceMeta.todayPriceValue !== null ? window.CotoSorter.utils.formatPrice(priceMeta.todayPriceValue) : "Verificación Pending";
-
-    hoverWrap.appendChild(hoverTitleDate);
-    hoverWrap.appendChild(hoverList);
-    priceBlock.appendChild(visibleLastLine);
-    priceBlock.appendChild(visibleLastValue);
-    priceBlock.appendChild(visibleTodayLine);
-    priceBlock.appendChild(visibleTodayValue);
-    priceBlock.appendChild(hoverWrap);
-
-    body.appendChild(text);
-    body.appendChild(priceBlock);
-
     const actions = document.createElement("div");
-    actions.className = "coto-sorter-shopping-row-actions";
+    actions.className = "coto-sorter-shopping-row-actions coto-sorter-favorite-card-actions";
 
     const editBtn = document.createElement("button");
     editBtn.type = "button";
@@ -517,13 +589,22 @@ window.CotoSorter.shoppingList = (function () {
     actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
 
+    hoverWrap.appendChild(hoverTitle);
+    hoverWrap.appendChild(hoverDate);
+    hoverWrap.appendChild(hoverStatus);
+    hoverWrap.appendChild(actions);
+
+    media.appendChild(image);
+    media.appendChild(hoverWrap);
+
     row.appendChild(checkboxWrap);
+    body.appendChild(media);
     row.appendChild(body);
-    row.appendChild(actions);
 
     row.addEventListener("click", (event) => {
       if (event.target.closest("button, input, label")) return;
       checkbox.checked = !checkbox.checked;
+      row.classList.toggle("is-selected", checkbox.checked);
       if (onToggleChecked) onToggleChecked(item, checkbox.checked);
     });
 
@@ -727,18 +808,51 @@ window.CotoSorter.shoppingList = (function () {
       const toScan = Array.from(allFavorites);
       const tabs = [];
 
+      debugLog("Favorite verification scan started", {
+        favoritesCount: toScan.length,
+      });
+
       for (const fav of toScan) {
         const verifyUrl = buildFavoriteVerifyUrl(fav);
-        if (!verifyUrl) continue;
+        if (!verifyUrl) {
+          debugLog("Favorite verification skipped: missing direct href", {
+            favoriteId: fav.id,
+            favoriteName: fav.name || fav.searchTerm || null,
+          });
+          continue;
+        }
         tabs.push({ id: `verify:${fav.id}`, url: verifyUrl });
+        debugLog("Favorite verification tab queued", {
+          favoriteId: fav.id,
+          favoriteName: fav.name || fav.searchTerm || null,
+          verifyUrl,
+        });
       }
 
       if (tabs.length === 0) {
-        alert("No se pudieron construir búsquedas para verificar favoritos.");
+        alert("No se pudieron construir URLs directas para verificar favoritos.");
+        debugLog("Favorite verification scan produced no tabs", {
+          favoritesCount: toScan.length,
+        });
         return;
       }
 
       const runner = window.CotoSorter?.tabRunner;
+
+      // If there's only one tab to open, use localStorage signalling so the
+      // opened URL can stay clean (no hash fragment). The opened tab will
+      // read and clear the `cotoSorterPendingVerify` key.
+      if (tabs.length === 1) {
+        try {
+          localStorage.setItem('cotoSorterPendingVerify', String(tabs[0].id).replace(/^verify:/, ''));
+          // strip fragment if present (buildFavoriteVerifyUrl added it)
+          const cleanUrl = String(tabs[0].url).split('#')[0];
+          tabs[0].url = cleanUrl;
+        } catch (e) {
+          /* ignore */
+        }
+      }
+
       if (runner && typeof runner.openBatchTabs === "function") {
         await runner.openBatchTabs(tabs, { delayMs: 900, keepFocus: false });
       } else {
@@ -750,6 +864,9 @@ window.CotoSorter.shoppingList = (function () {
       }
 
       if (typeof progressCallback === "function") progressCallback("Verificando...");
+      debugLog("Favorite verification scan launched", {
+        tabsCount: tabs.length,
+      });
       alert(`Se iniciaron ${tabs.length} verificaciones en pestañas. Cada pestaña se cierra automáticamente al terminar.`);
     }
 
@@ -905,7 +1022,7 @@ window.CotoSorter.shoppingList = (function () {
     favoritesTitle.textContent = "Favoritos Guardados";
 
     const favoritesList = document.createElement("div");
-    favoritesList.className = "coto-sorter-shopping-list";
+    favoritesList.className = "coto-sorter-shopping-list coto-sorter-favorites-grid";
     favoritesList.textContent = "Cargando favoritos...";
 
     favoritesTop.appendChild(favoritesTitle);
@@ -1001,6 +1118,7 @@ window.CotoSorter.shoppingList = (function () {
     const selectedFavoriteIds = new Set();
     const selectedManualListIds = new Set();
     let activeTab = "manual";
+    let favoritesLoaded = false;
 
     function updateActionButtonState() {
       openBtn.disabled = selectedFavoriteIds.size === 0 && selectedManualListIds.size === 0;
@@ -1045,6 +1163,12 @@ window.CotoSorter.shoppingList = (function () {
           btn.dataset.confirming = "0";
           btn.textContent = "🗑";
           btn.classList.remove("is-danger", "is-confirming");
+        }
+
+        const favoriteCheckbox = favoritesList.querySelector(`input[type="checkbox"][data-favorite-id="${item.id}"]`);
+        const favoriteCard = favoriteCheckbox?.closest?.(".coto-sorter-favorite-card");
+        if (favoriteCard) {
+          favoriteCard.classList.toggle("is-selected", checked);
         }
       } catch (err) {
         /* ignore DOM lookup errors */
@@ -1116,8 +1240,7 @@ window.CotoSorter.shoppingList = (function () {
       }
     }
 
-    async function refreshFavoritesList() {
-      favoritesState = await favorites.getFavorites();
+    function renderFavoritesList() {
       favoritesList.textContent = "";
 
       if (favoritesState.length === 0) {
@@ -1150,13 +1273,18 @@ window.CotoSorter.shoppingList = (function () {
               return;
             }
 
-              const result = await favorites.updateFavorite(currentItem.id, patch);
-              if (!result.saved) {
-                alert("No se pudo actualizar el favorito.");
-                return;
-              }
+            const result = await favorites.updateFavorite(currentItem.id, patch);
+            if (!result.saved) {
+              alert("No se pudo actualizar el favorito.");
+              return;
+            }
 
-              await refreshFavoritesList();
+            const index = favoritesState.findIndex((favorite) => favorite.id === currentItem.id);
+            if (index !== -1) {
+              favoritesState[index] = result.favorite;
+            }
+
+            renderFavoritesList();
           },
             async (currentItem) => {
               // Deletion is confirmed via the row UI (two clicks). Proceed to remove.
@@ -1167,12 +1295,37 @@ window.CotoSorter.shoppingList = (function () {
               }
 
               selectedFavoriteIds.delete(currentItem.id);
+              favoritesState = favoritesState.filter((favorite) => favorite.id !== currentItem.id);
               updateActionButtonState();
-              await refreshFavoritesList();
+              renderFavoritesList();
             },
           (currentItem, checked) => setFavoriteChecked(currentItem, checked)
         );
         favoritesList.appendChild(row);
+      }
+    }
+
+    async function refreshFavoritesList() {
+      if (!favoritesLoaded) {
+        favoritesState = await favorites.getFavorites();
+        favoritesLoaded = true;
+      }
+
+      renderFavoritesList();
+    }
+
+    if (!favoritesStorageListener && chrome?.storage?.onChanged?.addListener) {
+      favoritesStorageListener = async (changes, areaName) => {
+        if (areaName !== "local") return;
+        if (!changes || !changes[favorites.STORAGE_KEY]) return;
+        favoritesLoaded = false;
+        await refreshFavoritesList();
+      };
+
+      try {
+        chrome.storage.onChanged.addListener(favoritesStorageListener);
+      } catch (e) {
+        favoritesStorageListener = null;
       }
     }
 
@@ -1340,7 +1493,43 @@ window.CotoSorter.shoppingList = (function () {
   }
 
   async function toggleFavoriteFromCard(data) {
-    const result = await favorites.toggleFavorite(data);
+    let favoriteData = data;
+
+    try {
+      const svc = window.CotoSorter?.productService;
+      if (svc && typeof svc.resolveFavoriteProductFromPageUrl === "function" && data) {
+        const matched = await svc.resolveFavoriteProductFromPageUrl(window.location.href, data);
+
+        if (matched) {
+          favoriteData = {
+            ...data,
+            ...matched,
+            activePrice: matched.activePrice ?? data.activePrice,
+            referencePrice: matched.referencePrice ?? data.referencePrice,
+            productListPrice: matched.productListPrice ?? matched.product_list_price ?? data.productListPrice ?? data.product_list_price,
+            priceWithoutTax: matched.priceWithoutTax ?? data.priceWithoutTax,
+            discountRatio: matched.discountRatio ?? data.discountRatio,
+            promoPriceRaw: matched.promoPriceRaw ?? data.promoPriceRaw,
+            promoTags: Array.isArray(matched.promoTags) && matched.promoTags.length > 0 ? matched.promoTags : (data.promoTags || []),
+            unitPriceText: matched.unitPriceText ?? data.unitPriceText,
+            unitType: matched.unitType ?? data.unitType,
+            imgSrc: matched.imgSrc ?? data.imgSrc,
+            href: matched.href ?? data.href,
+            brand: matched.brand ?? data.brand,
+            productBrand: matched.productBrand ?? data.productBrand,
+            product_brand: matched.product_brand ?? data.product_brand,
+            priceText: matched.priceText ?? data.priceText,
+            discountedPriceText: matched.discountedPriceText ?? data.discountedPriceText,
+            adjustedReferencePrice: matched.adjustedReferencePrice ?? data.adjustedReferencePrice,
+            maxFormatPriceRaw: matched.maxFormatPriceRaw ?? data.maxFormatPriceRaw,
+          };
+        }
+      }
+    } catch (err) {
+      debugLog("Favorite save enrichment failed; using card snapshot", err?.message || err);
+    }
+
+    const result = await favorites.toggleFavorite(favoriteData);
     debugLog(result.saved ? "Favorite saved" : "Favorite removed", data?.name || data?.searchTerm || "");
     return result;
   }

@@ -15,6 +15,40 @@
     return window.CotoSorter.shoppingList || null;
   }
 
+  function isRecaptchaTimeoutError(reason) {
+    const message = String(reason?.message || reason || "");
+    return /reCAPTCHA\s+Timeout/i.test(message);
+  }
+
+  function setupRejectionGuards() {
+    window.addEventListener("unhandledrejection", (event) => {
+      debugLog("Unhandled promise rejection", {
+        url: window.location.href,
+        message: String(event?.reason?.message || event?.reason || ""),
+      });
+
+      if (!isRecaptchaTimeoutError(event?.reason)) {
+        return;
+      }
+
+      debugLog("Ignored site reCAPTCHA timeout rejection", {
+        url: window.location.href,
+        message: String(event?.reason?.message || event?.reason || ""),
+      });
+      event.preventDefault();
+    });
+
+    window.addEventListener("error", (event) => {
+      debugLog("Window error", {
+        url: window.location.href,
+        message: String(event?.message || event?.error?.message || ""),
+        source: event?.filename || null,
+        line: event?.lineno || null,
+        column: event?.colno || null,
+      });
+    });
+  }
+
   // ---- MutationObserver ----
   let observer = null;
   let debounceTimer = null;
@@ -66,6 +100,7 @@
       /* ignore */
     }
 
+    setupRejectionGuards();
     setupApiUrlCapture();
     const uiModule = getUIModule();
     if (uiModule && typeof uiModule.injectUI === "function") {
@@ -116,6 +151,11 @@
     init();
   }
 
-  // Limpieza al salir de la página
-  window.addEventListener("unload", teardownObserver);
+  // Limpieza al salir de la página sin depender de `unload`.
+  window.addEventListener("pagehide", teardownObserver);
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      teardownObserver();
+    }
+  });
 })();

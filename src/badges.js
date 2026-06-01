@@ -106,6 +106,63 @@ window.CotoSorter.badges = (function () {
     };
   }
 
+  function buildFavoriteSnapshotFromProductEl(productEl, data) {
+    const productService = window.CotoSorter?.productService;
+    if (!productService || typeof productService.buildFavoriteSnapshot !== "function") return null;
+
+    const formatPrice = window.CotoSorter?.utils?.formatPrice || ((value) => String(value));
+    const nameEl = productEl.querySelector(".nombre-producto, h3, h4.card-title, .card-title, [data-cnstrc-item-name]");
+    const name = String(nameEl?.textContent || nameEl?.innerText || productEl.getAttribute("data-cnstrc-item-name") || "").trim();
+    if (!name) return null;
+
+    const hrefEl = productEl.querySelector("a[href]");
+    const imgEl = productEl.querySelector("img");
+    const priceAttrRaw = productEl.getAttribute("data-cnstrc-item-price");
+    const priceAttr = priceAttrRaw == null ? NaN : parseFloat(priceAttrRaw);
+    const displayedPriceEl = productEl.querySelector("var.price, .price.h3, h4.card-title, .card-title");
+    const displayedPrice = displayedPriceEl ? parsePrice(displayedPriceEl.textContent || displayedPriceEl.innerText || "") : NaN;
+
+    let regularPrice = NaN;
+    for (const small of productEl.querySelectorAll("small")) {
+      const text = small.textContent || small.innerText || "";
+      const regMatch = text.match(/Precio\s+Regular\s*:\s*\$([\d\.,]+)/i);
+      if (regMatch) {
+        regularPrice = parsePrice(regMatch[1]);
+        break;
+      }
+    }
+
+    if (!Number.isFinite(regularPrice) || regularPrice <= 0) {
+      regularPrice = Number.isFinite(priceAttr) && priceAttr > 0
+        ? priceAttr
+        : (Number.isFinite(displayedPrice) && displayedPrice > 0 ? displayedPrice : NaN);
+    }
+
+    const activePrice = Number.isFinite(displayedPrice) && displayedPrice > 0
+      ? displayedPrice
+      : (Number.isFinite(priceAttr) && priceAttr > 0 ? priceAttr : regularPrice);
+    const hasDiscount = Number.isFinite(activePrice) && Number.isFinite(regularPrice) && activePrice > 0 && regularPrice > 0 && activePrice < regularPrice;
+
+    return productService.buildFavoriteSnapshot({
+      name,
+      brand: resolveBrand({ name }),
+      href: String(hrefEl?.href || ""),
+      imgSrc: String(imgEl?.src || ""),
+      priceText: Number.isFinite(regularPrice) ? formatPrice(regularPrice) : "",
+      discountedPriceText: hasDiscount && Number.isFinite(activePrice) ? formatPrice(activePrice) : null,
+      activePrice: Number.isFinite(activePrice) ? activePrice : null,
+      referencePrice: Number.isFinite(regularPrice) ? regularPrice : null,
+      adjustedReferencePrice: Number.isFinite(regularPrice) ? regularPrice : (Number.isFinite(activePrice) ? activePrice : null),
+      discountRatio: hasDiscount && Number.isFinite(regularPrice) && regularPrice > 0 ? (activePrice / regularPrice) : 1,
+      promoPriceRaw: hasDiscount && Number.isFinite(activePrice) ? activePrice : null,
+      promoTags: hasDiscount ? ["Favorito verificado"] : [],
+    }, {
+      searchTerm: name,
+      writtenText: name,
+      lastCheckedAt: Date.now(),
+    });
+  }
+
   // ---- Badge Injection ----
 
   /** Inyecta o actualiza el badge de precio en un card wrapper. */
@@ -125,24 +182,26 @@ window.CotoSorter.badges = (function () {
     const imgEl = wrapper.querySelector("img") || productEl.querySelector("img");
     const productService = window.CotoSorter?.productService;
     const favoriteData = name && productService && typeof productService.buildFavoriteSnapshot === "function"
-      ? productService.buildFavoriteSnapshot({
-          name,
-          brand: resolveBrand({ name }),
-          href: String(hrefEl?.href || ""),
-          imgSrc: String(imgEl?.src || ""),
-          priceText: data ? formatPrice(data.regularPrice || data.displayedPrice || 0) : "",
-          discountedPriceText: data && data.discountRatio < 0.999 ? formatPrice(data.displayedPrice || 0) : null,
-          activePrice: data ? data.displayedPrice : null,
-          referencePrice: data ? data.regularPrice : null,
-          adjustedReferencePrice: data ? data.adjustedUnitPrice : null,
-          discountRatio: data ? data.discountRatio : 1,
-          promoPriceRaw: data && data.discountRatio < 0.999 ? data.displayedPrice : null,
-          promoTags: data && data.discountRatio < 0.999 ? ["Favorito verificado"] : [],
-        }, {
-          searchTerm: name,
-          writtenText: name,
-          lastCheckedAt: Date.now(),
-        })
+      ? (data
+          ? productService.buildFavoriteSnapshot({
+              name,
+              brand: resolveBrand({ name }),
+              href: String(hrefEl?.href || ""),
+              imgSrc: String(imgEl?.src || ""),
+              priceText: formatPrice(data.regularPrice || data.displayedPrice || 0),
+              discountedPriceText: data && data.discountRatio < 0.999 ? formatPrice(data.displayedPrice || 0) : null,
+              activePrice: data ? data.displayedPrice : null,
+              referencePrice: data ? data.regularPrice : null,
+              adjustedReferencePrice: data ? data.adjustedUnitPrice : null,
+              discountRatio: data ? data.discountRatio : 1,
+              promoPriceRaw: data && data.discountRatio < 0.999 ? data.displayedPrice : null,
+              promoTags: data && data.discountRatio < 0.999 ? ["Favorito verificado"] : [],
+            }, {
+              searchTerm: name,
+              writtenText: name,
+              lastCheckedAt: Date.now(),
+            })
+          : buildFavoriteSnapshotFromProductEl(productEl, data))
       : null;
 
     if (favoriteData && window.CotoSorter.favorites && window.CotoSorter.favorites.buildFavoriteId) {

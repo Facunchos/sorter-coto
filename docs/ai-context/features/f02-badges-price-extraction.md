@@ -37,10 +37,12 @@
 
 ## Invariants
 - MUST prioritize `Precio Regular:` text before attribute fallback.
+- Price resolution may infer a promo from numeric evidence alone when promo tags are missing, so network-sourced favorite snapshots can still render as discounted if the price fields disagree.
 - MUST only treat `done` as terminal; `no-data` must be re-attempted later.
 - MUST keep adjusted-price formula aligned with Vista Ligera rule.
 - Fallback behavior: if no valid data, mark `no-data` and skip badge.
 - The full favorite snapshot payload is owned by `src/productService.js`; `extractProductData()` should stay limited to extracting and comparing card prices.
+- Favorite snapshots may be enriched from the page API/BFF record before storage, so the shared snapshot can carry `productListPrice` and `priceWithoutTax` even when the card DOM is incomplete.
 
 ## Failure Modes
 - Symptom: discount badge wrong on promo cards.
@@ -50,5 +52,6 @@
 ## Edit Impact Checklist
 - If pricing formula changes, review `features/f06-vista-ligera-rendering.md`.
 - If regex changes, review `features/f08-utils-and-normalization.md`.
+- If favorite save enrichment changes, review `features/f09-shopping-list-batch-flow.md`.
 - Tests/manual checks: regular-only card, promo card, card with missing unit block.
 - `NEEDS_CODE_CHECK`: yes

@@ -28,6 +28,7 @@
 - `tabRunner` (`src/tabRunner.js`): centralizes paced opening of search tabs (`openBatchTabs`) and a cross-tab queue/lock (`waitForBatchTurn` / `releaseBatchTurn`) to avoid concurrent Vista Ligera runs and race conditions.
 - `productService` (`src/productService.js`): single place to normalize product records from API responses or DOM-parsed pages. `revista.js`, the favorites scan, and the modal price-summary renderer now prefer this service to keep field naming consistent.
 - `utils.slugify` moved to `src/utils.js` and used across `shoppingList`, `favorites`, and `ui` to reduce duplication.
+- Favorite saves now try to enrich the card snapshot from the current page product dataset before storing it, so the saved record can reuse API/BFF pricing fields when the DOM card is incomplete.
 
 ## Data Flow (5-8 steps)
 1. User saves products as favorites or opens the shopping list modal.
@@ -88,8 +89,10 @@
 - Favorite rows show only the editable name, without duplicating the name in a secondary line.
 - Favorite rows now render a `Prices` summary block with Vista Ligera-style regular/discount price classes and a custom hover card that shows the last verification date plus regular, discounted, discount-state, and actual price snapshots.
 - Favorite price snapshots prefer the same Vista Ligera keys used by generated cards (`priceText`, `discountedPriceText`, `activePrice`, `referencePrice`, `adjustedReferencePrice`, `discountRatio`, `promoPriceRaw`, `promoTags`) and fall back to legacy `lastSeen*` fields when needed.
+- Favorite price snapshots also carry network-backed price hints such as `productListPrice` and `priceWithoutTax` when available.
 - Favorite rows now highlight state by verification result: discount matches render in light green with discount badge, and non-verified entries show a blue `Pending` badge.
 - The `Unir en una sola Vista Ligera` checkbox is rendered on the same bottom action row as `Verificar favoritos`.
+- Favorite creation and verification resolve the current page product through `productService.resolveFavoriteProductFromPageUrl()` so the saved snapshot comes from the network/API record first, with DOM parsing only as fallback.
 
 ## Planned Favorite Price Scan
 - Add a favorites-only action button that scans each selected favorite one at a time.
@@ -107,6 +110,9 @@
 - Verifications are launched in paced order from the modal and are serialized by the shared queue lock to avoid concurrent race conditions.
 - If favorites are selected in the modal, only selected favorites are launched; otherwise all favorites are launched.
 - Manual-list saves now update an existing list when the current name matches a stored list name, even if that list is not currently selected in the editor.
+- Favorite verification tabs fall back to the front of the verify queue when the URL hash is stripped, so sequential tabs keep their own favorite id even if multiple favorites share the same page URL.
+- The shopping-list modal refreshes saved favorites on `chrome.storage.local` changes, so verified favorites leave the pending state without reopening the modal.
+- Favorite verification prefers network extraction first on the current page and falls back to DOM-only extraction when API data is unavailable.
 
 ## Edit Impact Checklist
 - If tab orchestration changes, review `features/f07-ui-panel-actions.md`.

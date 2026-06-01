@@ -14,6 +14,7 @@
 ## Inputs / Outputs
 - Inputs: `PerformanceResourceTiming`, current page URL, API JSON pages.
 - Outputs: normalized product list (name, brand, prices, unit type, promo tags, image, href).
+- Outputs: price hints such as `productListPrice` and `priceWithoutTax` when the BFF response provides them.
 - Side effects: stores `capturedEndecaUrl` and `capturedBffUrl` in module state.
 
 ## Dependencies
@@ -39,6 +40,7 @@
 - MUST accept both Endeca and BFF sources.
 - MUST preserve category/page context when building URLs.
 - MUST preserve source brand metadata (`brand`/`productBrand`/`product_brand`) in normalized products when available.
+- MUST preserve BFF pricing hints (`product_list_price` / `productListPrice` / `priceWithoutTax`) so downstream favorites and Vista Ligera can resolve the same effective price.
 - MUST fail safely when one source is unavailable.
 - Fallback behavior: use `window.location.href` when captured URL is invalid for current page.
 

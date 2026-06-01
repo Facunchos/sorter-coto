@@ -608,6 +608,12 @@ window.CotoSorter.vistaLigera = (function () {
       font-size: 15px;
       font-weight: 700;
       color: #b94a3a;
+      padding: 2px 6px;
+      border-radius: 8px;
+      transition:
+        background-color var(--motion-fast) var(--motion-ease),
+        box-shadow var(--motion-fast) var(--motion-ease),
+        color var(--motion-fast) var(--motion-ease);
     }
 
     .price-regular.striked {
@@ -621,6 +627,12 @@ window.CotoSorter.vistaLigera = (function () {
       font-size: 16px;
       font-weight: 700;
       color: var(--accent-green);
+      padding: 2px 6px;
+      border-radius: 8px;
+      transition:
+        background-color var(--motion-fast) var(--motion-ease),
+        box-shadow var(--motion-fast) var(--motion-ease),
+        color var(--motion-fast) var(--motion-ease);
     }
 
     .badges {
@@ -649,6 +661,14 @@ window.CotoSorter.vistaLigera = (function () {
       border-radius: 8px;
       background: var(--accent-green-soft);
       border: 1px solid #c8ead7;
+    }
+
+    .card-link:hover .price-regular,
+    .card-link:hover .price-discount,
+    .card-link:hover .unit-price {
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72), 0 4px 14px rgba(255, 255, 255, 0.18);
+      color: #2f2723;
     }
 
     @keyframes cardEnter {

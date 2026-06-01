@@ -580,3 +580,132 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+
+.coto-sorter-favorites-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-height: none;
+  overflow: visible;
+}
+
+.coto-sorter-favorite-card {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  min-height: 184px;
+  background: #fff;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.coto-sorter-favorite-card:hover {
+  transform: translateY(-1px);
+  border-color: #d8a18f;
+  box-shadow: 0 10px 28px rgba(88, 55, 38, 0.12);
+}
+
+.coto-sorter-favorite-card.is-selected {
+  border-color: #e20025;
+  box-shadow: 0 0 0 1px rgba(226, 0, 37, 0.16), 0 10px 28px rgba(88, 55, 38, 0.12);
+}
+
+.coto-sorter-favorite-card-check {
+  position: absolute;
+  inset: 0 auto auto 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.coto-sorter-favorite-card-body {
+  display: block;
+  min-height: 184px;
+}
+
+.coto-sorter-favorite-card-media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 184px;
+  background: linear-gradient(180deg, #fffaf7 0%, #f8efe9 100%);
+}
+
+.coto-sorter-favorite-card-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: linear-gradient(135deg, #f7ece7 0%, #fff 100%);
+}
+
+.coto-sorter-favorite-card-image[data-placeholder="1"] {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(226, 0, 37, 0.08) 0%, transparent 32%),
+    linear-gradient(135deg, #f6ece7 0%, #fff8f5 100%);
+}
+
+.coto-sorter-favorite-card-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255, 252, 250, 0.08) 0%, rgba(46, 38, 34, 0.82) 100%);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.coto-sorter-favorite-card:hover .coto-sorter-favorite-card-hover {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.coto-sorter-favorite-card-hover-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.coto-sorter-favorite-card-hover-date {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.coto-sorter-favorite-card-hover-status {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.coto-sorter-favorite-card-hover-status.price-regular {
+  color: #121212;
+}
+
+.coto-sorter-favorite-card-hover-status.price-discount {
+  color: #1f9866;
+}
+
+.coto-sorter-favorite-card-hover-status.price-pending {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.coto-sorter-favorite-card-actions {
+  margin-top: 4px;
+  align-self: flex-end;
+}
+
+.coto-sorter-favorite-card-actions .coto-sorter-shopping-icon-btn {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.coto-sorter-favorite-card-actions .coto-sorter-shopping-icon-btn:hover {
+  background: #fff;
+}
