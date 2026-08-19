@@ -6,7 +6,10 @@
   "permissions": ["storage"],
   "content_scripts": [
     {
-      "matches": ["https://www.cotodigital.com.ar/*"],
+      "matches": [
+        "https://www.coto.com.ar/*",
+        "https://www.cotodigital.com.ar/*"
+      ],
       "js": [
         "src/utils.js",
         "src/promoUtils.js",
