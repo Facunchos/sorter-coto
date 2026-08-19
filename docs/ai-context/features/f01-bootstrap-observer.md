@@ -32,6 +32,7 @@
 8. On unload, observer disconnects and timer is cleared.
 
 ## Invariants
+- MUST run on both `coto.com.ar` and `cotodigital.com.ar` page hosts while the site transitions between domains.
 - MUST skip mutation handling while `sorter.getIsSorting()` is true.
 - MUST debounce mutation bursts.
 - MUST treat non-`done` wrappers as retryable.
