@@ -88,6 +88,34 @@ Funciona con **cualquier tipo de promo**: X% DTO, 2da unidad al X%, 2x1, 3x2, et
 - **Anti-loop** — flag `isSorting` + `requestAnimationFrame` evitan loops con el MutationObserver
 - **Debounce** — el observer agrupa mutaciones en ventanas de 400ms
 
+## Empaquetar para subir a las tiendas
+
+Desde la raíz del proyecto, en **PowerShell** (no requiere crear carpeta temporal):
+
+```powershell
+$version = (Get-Content manifest.json -Raw | ConvertFrom-Json).version
+$zipPath = "dist\sorter-coto-v$version.zip"
+New-Item -ItemType Directory -Path (Split-Path $zipPath) -Force | Out-Null
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+$zipAbs = Join-Path (Get-Location).Path $zipPath
+$files = @(Get-Item manifest.json, content.js, styles.css) +
+  (Get-ChildItem src, popup, icons -Recurse -File) |
+  Where-Object { $_.FullName -notmatch '\\dist\\' }
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::Open($zipAbs, 'Create')
+try {
+  foreach ($f in $files) {
+    $entry = $f.FullName.Substring((Get-Location).Path.Length + 1).Replace('\', '/')
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $f.FullName, $entry, 'Optimal') | Out-Null
+  }
+} finally { $zip.Dispose() }
+```
+
+Produce `dist\sorter-coto-v<versión>.zip`, listo para subir tanto a la **Chrome Web Store** como a **Firefox AMO** (el mismo ZIP sirve para ambas).
+
+> Importante: no uses `Compress-Archive` para Firefox — genera rutas con `\` y AMO las rechaza (`Invalid file name in archive`). El script de arriba fuerza `/` en cada entrada.
+
 ## Licencia
 
 Código abierto. Usalo, modificalo, compartilo.
