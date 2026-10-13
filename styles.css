@@ -400,3 +400,179 @@
     padding: 2px 6px;
   }
 }
+
+/* =========================================================
+   Comparar Precios con Competencia + Precio Real del Carrito
+   ========================================================= */
+
+/* ---- Panel button: Comparar Carrito (siempre en rojo) ---- */
+.coto-sorter-btn-compare {
+  background: #e20025;
+  border-color: #e20025;
+  color: #fff;
+}
+
+.coto-sorter-btn-compare:hover {
+  background: #c5001f;
+  border-color: #c5001f;
+}
+
+/* ---- Precio real (cart card) ---- */
+.coto-sorter-real-price {
+  margin: 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #444;
+}
+
+.coto-sorter-real-price .coto-sorter-real-value {
+  color: #2e7d32;
+}
+
+.coto-sorter-real-price.coto-sorter-real-unknown {
+  color: #888;
+  font-weight: 500;
+}
+
+.coto-sorter-real-label {
+  color: #555;
+}
+
+.coto-sorter-real-promo {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e20025;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ---- Total real chip ---- */
+.coto-sorter-total-real {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.coto-sorter-total-real.coto-sorter-real-unknown {
+  color: #888;
+}
+
+/* ---- Competitor tiles ---- */
+.coto-sorter-compare-tiles {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0;
+  flex-wrap: wrap;
+}
+
+.coto-sorter-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 92px;
+  padding: 6px 8px;
+  border: 1.5px solid #ccc;
+  border-radius: 8px;
+  background: #fafafa;
+  text-decoration: none !important;
+  cursor: default;
+}
+
+.coto-sorter-tile-icon {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+}
+
+.coto-sorter-icon-carrefour {
+  background: #0b4ea2;
+}
+
+.coto-sorter-icon-dia {
+  background: #e20018;
+}
+
+.coto-sorter-tile-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+}
+
+.coto-sorter-tile-promo {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f7c948;
+  color: #333;
+}
+
+.coto-sorter-tile-lower {
+  border-color: #2e7d32;
+  background: #eafaef;
+}
+
+.coto-sorter-tile-lower .coto-sorter-tile-price {
+  color: #2e7d32;
+}
+
+.coto-sorter-tile-higher {
+  border-color: #e20025;
+  background: #fdeef0;
+}
+
+.coto-sorter-tile-higher .coto-sorter-tile-price {
+  color: #e20025;
+}
+
+.coto-sorter-tile-na .coto-sorter-tile-price,
+.coto-sorter-tile-pending .coto-sorter-tile-price {
+  color: #999;
+  font-weight: 500;
+}
+
+/* ---- Cart progress bar ---- */
+.coto-sorter-cart-progress {
+  display: none;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid #e20025;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.coto-sorter-cart-progress.coto-sorter-progress-active {
+  display: block;
+}
+
+/* ---- Toast notice ---- */
+.coto-sorter-notice {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 2147483647;
+  animation: coto-sorter-fade-in 0.2s ease;
+}
+
+/* ---- Extras (toggle del popup): botones avanzados ocultos ---- */
+.coto-sorter-extra {
+  display: none;
+}
+
+.coto-sorter-extras-on .coto-sorter-extra {
+  display: block;
+}

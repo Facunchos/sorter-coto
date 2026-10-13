@@ -201,7 +201,7 @@ window.CotoSorter.ui = (function () {
     wrap.className = "coto-sorter-generate-wrap";
 
     btnOrdenar = document.createElement("button");
-    btnOrdenar.className = "coto-sorter-btn";
+    btnOrdenar.className = "coto-sorter-btn coto-sorter-extra";
     btnOrdenar.textContent = "Ordenar";
     btnOrdenar.title = "Elegir criterio de ordenamiento";
 
@@ -236,7 +236,7 @@ window.CotoSorter.ui = (function () {
     wrap.className = "coto-sorter-generate-wrap";
 
     const btnGenerar = document.createElement("button");
-    btnGenerar.className = "coto-sorter-btn";
+    btnGenerar.className = "coto-sorter-btn coto-sorter-extra";
     btnGenerar.textContent = "Generar";
     btnGenerar.title = "Generar documentos a partir de los productos";
 
@@ -320,6 +320,25 @@ window.CotoSorter.ui = (function () {
     return btn;
   }
 
+  function createComparearButton() {
+    const btn = document.createElement("button");
+    btn.className = "coto-sorter-btn coto-sorter-btn-compare";
+    btn.textContent = "Comparar Carrito";
+    btn.title = "Clickeame cuando estes en el carrito";
+    if (window.CotoSorter.priceCompare && window.CotoSorter.priceCompare.isCartPage()) {
+      btn.title = "Comparar los precios del carrito con Carrefour y Día";
+    }
+    btn.addEventListener("click", () => {
+      const pc = window.CotoSorter.priceCompare;
+      if (!pc || !pc.isCartPage()) {
+        if (pc) pc.showNotice("Abrí el carrito para comparar precios");
+        return;
+      }
+      pc.startComparison();
+    });
+    return btn;
+  }
+
   function createResetButton() {
     const btn = document.createElement("button");
     btn.className = "coto-sorter-btn coto-sorter-btn-reset";
@@ -343,6 +362,23 @@ window.CotoSorter.ui = (function () {
     return btn;
   }
 
+  function applyExtras(enabled) {
+    if (panelEl) panelEl.classList.toggle("coto-sorter-extras-on", enabled === true);
+  }
+
+  function initExtras() {
+    try {
+      chrome.storage.local.get("extras", (result) => applyExtras(result.extras === true));
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "local" && changes.extras) {
+          applyExtras(changes.extras.newValue === true);
+        }
+      });
+    } catch {
+      applyExtras(false);
+    }
+  }
+
   // =========================================================
   // Inyección del panel
   // =========================================================
@@ -358,6 +394,7 @@ window.CotoSorter.ui = (function () {
     buttons.className = "coto-sorter-buttons";
 
     buttons.appendChild(createVistaLigeraButton());
+    buttons.appendChild(createComparearButton());
     buttons.appendChild(createOrdenarDropdown());
     buttons.appendChild(createGenerarDropdown());
     buttons.appendChild(createResetButton());
@@ -372,6 +409,7 @@ window.CotoSorter.ui = (function () {
 
     makeDraggable(panelEl, header);
     document.body.appendChild(panelEl);
+    initExtras();
     scheduleVistaLigeraAfterReload();
     debugLog("UI panel injected");
   }

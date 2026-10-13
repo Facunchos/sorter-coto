@@ -94,25 +94,48 @@ Desde la raíz del proyecto, en **PowerShell** (no requiere crear carpeta tempor
 
 ```powershell
 $version = (Get-Content manifest.json -Raw | ConvertFrom-Json).version
-$zipPath = "dist\sorter-coto-v$version.zip"
-New-Item -ItemType Directory -Path (Split-Path $zipPath) -Force | Out-Null
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-$zipAbs = Join-Path (Get-Location).Path $zipPath
-$files = @(Get-Item manifest.json, content.js, styles.css) +
+New-Item -ItemType Directory -Path dist -Force | Out-Null
+$files = @(Get-Item manifest.json, content.js, bg.js, styles.css) +
   (Get-ChildItem src, popup, icons -Recurse -File) |
   Where-Object { $_.FullName -notmatch '\\dist\\' }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::Open($zipAbs, 'Create')
-try {
-  foreach ($f in $files) {
-    $entry = $f.FullName.Substring((Get-Location).Path.Length + 1).Replace('\', '/')
-    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $f.FullName, $entry, 'Optimal') | Out-Null
-  }
-} finally { $zip.Dispose() }
+
+function New-Package([string]$zipPath, [string]$manifestJson) {
+  if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+  $zipAbs = Join-Path (Get-Location).Path $zipPath
+  $zip = [System.IO.Compression.ZipFile]::Open($zipAbs, 'Create')
+  try {
+    foreach ($f in $files) {
+      if ($f.Name -eq 'manifest.json') {
+        $entry = [System.IO.Compression.ZipFileExtensions]::CreateEntry($zip, 'manifest.json')
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($manifestJson)
+        $stream = $entry.Open()
+        try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+        continue
+      }
+      $entry = $f.FullName.Substring((Get-Location).Path.Length + 1).Replace('\', '/')
+      [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $f.FullName, $entry, 'Optimal') | Out-Null
+    }
+  } finally { $zip.Dispose() }
+}
+
+$manifest = Get-Content manifest.json -Raw
+# Chrome: background.service_worker (como está en manifest.json)
+New-Package "dist\sorter-coto-v$version-chrome.zip" $manifest
+# Firefox: exige background.scripts como fallback (AMO lint: BACKGROUND_SERVICE_WORKER_NOFALLBACK);
+# Firefox usa scripts (event page) e ignora service_worker
+$manifestFF = $manifest -replace '"service_worker"\s*:\s*"bg\.js"', '"service_worker": "bg.js", "scripts": ["bg.js"]'
+New-Package "dist\sorter-coto-v$version-firefox.zip" $manifestFF
 ```
 
-Produce `dist\sorter-coto-v<versión>.zip`, listo para subir tanto a la **Chrome Web Store** como a **Firefox AMO** (el mismo ZIP sirve para ambas).
+Produce `dist\sorter-coto-v<versión>-chrome.zip` (**Chrome Web Store**) y
+`dist\sorter-coto-v<versión>-firefox.zip` (**Firefox AMO**). Los ZIP se diferencian solo en el
+manifest: Chrome exige `background.service_worker` y **rechaza** `background.scripts`
+(`'background.scripts' requires manifest version of 2 or lower`), mientras que AMO **exige** que
+`service_worker` venga acompañado de `scripts` como fallback
+(`BACKGROUND_SERVICE_WORKER_NOFALLBACK`) — Firefox ejecuta `scripts` (event page) e ignora
+`service_worker`. Validar el ZIP de Firefox con `npx web-ext lint --source-dir .`.
 
 > Importante: no uses `Compress-Archive` para Firefox — genera rutas con `\` y AMO las rechaza (`Invalid file name in archive`). El script de arriba fuerza `/` en cada entrada.
 

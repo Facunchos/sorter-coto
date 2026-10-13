@@ -56,6 +56,9 @@
 
     setupApiUrlCapture();
     injectUI();
+    if (window.CotoSorter.priceCompare) {
+      window.CotoSorter.priceCompare.init();
+    }
     setupObserver();
 
     // Inyectar badges iniciales tras render de Angular
