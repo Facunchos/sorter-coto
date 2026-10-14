@@ -339,7 +339,7 @@
   cursor: not-allowed;
 }
 
-/* ---- Progress indicator ---- */
+/* ---- Progress indicator (Vista Ligera) ---- */
 .coto-sorter-progress {
   display: none;
   flex-direction: column;
@@ -538,18 +538,16 @@
   font-weight: 500;
 }
 
-/* ---- Cart progress bar ---- */
-.coto-sorter-cart-progress {
-  display: none;
-  margin: 8px 0;
-  padding: 8px 10px;
-  border: 1px solid #e20025;
-  border-radius: 6px;
-  background: #fff;
+/* En grilla de productos: caja compacta de dos columnas dentro de la card */
+.coto-sorter-compare-tiles-page {
+  gap: 6px;
+  margin: 8px 0 2px;
 }
 
-.coto-sorter-cart-progress.coto-sorter-progress-active {
-  display: block;
+.coto-sorter-compare-tiles-page .coto-sorter-tile {
+  flex: 1 1 calc(50% - 6px);
+  min-width: 0;
+  padding: 5px 6px;
 }
 
 /* ---- Toast notice ---- */

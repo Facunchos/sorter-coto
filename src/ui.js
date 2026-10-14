@@ -323,18 +323,11 @@ window.CotoSorter.ui = (function () {
   function createComparearButton() {
     const btn = document.createElement("button");
     btn.className = "coto-sorter-btn coto-sorter-btn-compare";
-    btn.textContent = "Comparar Carrito";
-    btn.title = "Clickeame cuando estes en el carrito";
-    if (window.CotoSorter.priceCompare && window.CotoSorter.priceCompare.isCartPage()) {
-      btn.title = "Comparar los precios del carrito con Carrefour y Día";
-    }
+    btn.textContent = "Comparar";
+    btn.title = "Comparar precios con Carrefour y Día (carrito o productos en la página)";
     btn.addEventListener("click", () => {
       const pc = window.CotoSorter.priceCompare;
-      if (!pc || !pc.isCartPage()) {
-        if (pc) pc.showNotice("Abrí el carrito para comparar precios");
-        return;
-      }
-      pc.startComparison();
+      if (pc) pc.startComparison();
     });
     return btn;
   }

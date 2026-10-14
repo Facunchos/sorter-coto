@@ -16,12 +16,6 @@ window.CotoSorter.vistaLigera = (function () {
 
     const idAttr = cmpId ? ` data-cmp-id="${escapeHtmlAttr(cmpId)}"` : "";
 
-    const realRow = c && c.realText
-      ? `<div class="compare-real">Precio real: ${c.realText}` +
-        (c.realPromo ? ` <span class="compare-promo">${escapeHtmlAttr(c.realPromo)}</span>` : "") +
-        `</div>`
-      : `<div class="compare-real"></div>`;
-
     const tiles = ["carrefour", "dia"].map((key) => {
       const t = (c && c.tiles && c.tiles[key]) || { status: "pending" };
       const label = key === "carrefour" ? "Carrefour" : "Día";
@@ -36,21 +30,36 @@ window.CotoSorter.vistaLigera = (function () {
 
       const cls = t.lower === null ? "" : t.lower ? " compare-tile-lower" : " compare-tile-higher";
       const urlAttr = t.url ? ` data-url="${escapeHtmlAttr(t.url)}"` : "";
-      const clickable = t.url ? ` onclick="window.open(this.dataset.url,'_blank')"` : "";
+      const clickable = t.url ? ` onclick="event.preventDefault();event.stopPropagation();window.open(this.dataset.url,'_blank')"` : "";
+      const delta = t.deltaText ? `<span class="compare-delta">${escapeHtmlAttr(t.deltaText)}</span>` : "";
       const promo = t.promo ? `<span class="compare-promo">${escapeHtmlAttr(t.promo)}</span>` : "";
-      return `<span class="compare-tile${cls}"${storeAttr}${urlAttr}${clickable}>${nameHTML}<span class="compare-tile-price">${t.text}</span>${promo}</span>`;
+      return `<span class="compare-tile${cls}"${storeAttr}${urlAttr}${clickable}>${nameHTML}<span class="compare-tile-price">${t.text}</span>${delta}${promo}</span>`;
     }).join("");
 
-    return `<div class="compare-row"${idAttr}>${realRow}<div class="compare-tiles">${tiles}</div></div>`;
+    return `<div class="compare-row"${idAttr}><div class="compare-tiles">${tiles}</div></div>`;
   }
 
-  function buildCardHTML(p, groupUnitType) {
-    const safeName = (p.name || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-    const safeUnitType = (p.unitType || groupUnitType || "").toString();
-    const isDobleHoja = /doble\s+hoja/i.test(p.name || "");
+  function escapeText(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
-    const imgTag = p.imgSrc
-      ? `<img src="${p.imgSrc}" alt="" loading="lazy" onerror="this.style.display='none'">`
+  let printModeActive = false;
+
+  function buildCardHTML(p, groupUnitType) {
+    const rawName = String(p.name || "");
+    const safeName = escapeText(rawName);
+    const safeUnitType = escapeText(p.unitType || groupUnitType || "");
+    const isDobleHoja = /doble\s+hoja/i.test(rawName);
+    const safeHref = /^https?:\/\//i.test(String(p.href || "")) ? String(p.href) : "";
+    const imgSrc = p.imgSrc ? String(p.imgSrc) : "";
+
+    const imgTag = imgSrc
+      ? `<img src="${escapeHtmlAttr(imgSrc)}" alt="" loading="${printModeActive ? "eager" : "lazy"}" onerror="this.style.display='none'">`
       : `<div class="no-img"></div>`;
 
     const resolved = resolveDisplayPrices(p);
@@ -75,7 +84,10 @@ window.CotoSorter.vistaLigera = (function () {
       ? parseMoneyLoose(resolved.promoPriceText)
       : parseMoneyLoose(resolved.regularPriceText);
 
-    const tag = p.href ? "a" : "div";
+    const tag = safeHref ? "a" : "div";
+    const discountPctValue = resolved.hasDiscount
+      ? Math.round((1 - parseMoneyLoose(resolved.promoPriceText) / parseMoneyLoose(resolved.regularPriceText)) * 100)
+      : 0;
     const attrs = [
       `class="card-link"`,
       `data-name="${safeName.toLowerCase()}"`,
@@ -84,7 +96,8 @@ window.CotoSorter.vistaLigera = (function () {
       `data-promo="${escapeHtmlAttr(String(promoFilterValue).toLowerCase())}"`,
       `data-price="${Number.isFinite(primaryPriceValue) && primaryPriceValue > 0 ? primaryPriceValue : ""}"`,
       `data-unit-price="${Number.isFinite(resolved.unitPriceValue) && resolved.unitPriceValue > 0 ? resolved.unitPriceValue : ""}"`,
-      p.href ? `href="${p.href}" target="_blank"` : "",
+      `data-discount="${discountPctValue > 0 ? discountPctValue : ""}"`,
+      safeHref ? `href="${escapeHtmlAttr(safeHref)}" target="_blank"` : "",
     ].filter(Boolean).join(" ");
 
     const compareHTML = buildCompareHTML(p);
@@ -93,8 +106,8 @@ window.CotoSorter.vistaLigera = (function () {
   <div class="card${isDobleHoja ? " card-doble-hoja" : ""}">
     <div class="card-img">${imgTag}</div>
     <div class="card-info">
-      <div class="card-name">${p.name || "Producto"}</div>
-      <div class="card-brand">${brandLabel}</div>
+      <div class="card-name">${safeName || "Producto"}</div>
+      <div class="card-brand">${escapeText(brandLabel)}</div>
       <div class="${priceClass}">${resolved.regularPriceText}</div>
       ${discountRow}
       ${badgesHTML}
@@ -696,16 +709,11 @@ window.CotoSorter.vistaLigera = (function () {
       margin-top: 6px;
     }
 
-    .compare-real {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent-green, #2e7d32);
-    }
-
     .compare-tiles {
       display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
+      gap: 4px;
+      flex-wrap: nowrap;
+      align-items: stretch;
     }
 
     .compare-tile {
@@ -713,13 +721,15 @@ window.CotoSorter.vistaLigera = (function () {
       flex-direction: column;
       align-items: center;
       gap: 2px;
-      min-width: 74px;
-      padding: 4px 6px;
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 4px 4px;
       border: 1.5px solid #ccc;
       border-radius: 6px;
       background: #fafafa;
       cursor: default;
       color: inherit;
+      overflow: hidden;
     }
 
     .compare-tile-name {
@@ -782,6 +792,27 @@ window.CotoSorter.vistaLigera = (function () {
     }
 
     .compare-btn:hover { background: #b8001d; }
+
+    .compare-delta {
+      font-size: 9px;
+      font-weight: 700;
+      color: #555;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cmp-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6f5f57;
+      cursor: pointer;
+      white-space: nowrap;
+    }
 
     @keyframes cardEnter {
       from { opacity: 0; transform: translateY(6px); }
@@ -933,7 +964,7 @@ window.CotoSorter.vistaLigera = (function () {
     }
 
     @media print {
-      body { background: #fff; }
+      body { background: #fff; padding-bottom: 0; }
       header {
         position: static;
         box-shadow: none;
@@ -944,9 +975,8 @@ window.CotoSorter.vistaLigera = (function () {
       .search-wrap, .search-count, .group-collapse-btn { display: none !important; }
       .unit-filter-wrap { display: none !important; }
       .filters-row, .range-filter-wrap, .multi-filter, .vista-footer { display: none !important; }
+      .compare-btn, .cmp-toggle, #sort-select { display: none !important; }
       .group {
-        break-inside: avoid;
-        page-break-inside: avoid;
         margin-bottom: 16px;
         box-shadow: none;
         border-radius: 0;
@@ -986,6 +1016,9 @@ window.CotoSorter.vistaLigera = (function () {
       var promoFilter = document.getElementById('promo-filter');
       var clearBtn = document.getElementById('search-clear');
       var countEl = document.getElementById('search-count');
+      var cmpOnlyInput = document.getElementById('cmp-only');
+      var sortSelect = document.getElementById('sort-select');
+      var cmpSortBest = document.getElementById('cmp-sort-best');
       var cards   = Array.from(document.querySelectorAll('.card-link'));
       var groups  = Array.from(document.querySelectorAll('.group'));
 
@@ -1113,6 +1146,7 @@ window.CotoSorter.vistaLigera = (function () {
         var maxVal = parseFloat(priceMaxInput && priceMaxInput.value);
         var hasMin = Number.isFinite(minVal);
         var hasMax = Number.isFinite(maxVal);
+        if (hasMin && hasMax && minVal > maxVal) { var tmp = minVal; minVal = maxVal; maxVal = tmp; }
         var selectedPromos = getCheckedValues(promoOptions);
         var onlyAllowedBrands = selectedPromos.size > 0;
         var allowedBrands = getAllowedBrandsFromPromos(selectedPromos);
@@ -1121,7 +1155,8 @@ window.CotoSorter.vistaLigera = (function () {
 
         var selectedBrands = getCheckedValues(brandOptions);
         var visibleCount = 0;
-        var hasFilter = !!(normalizedTerm || selected || hasMin || hasMax || selectedBrands.size > 0 || selectedPromos.size > 0);
+        var onlyCmp = !!(cmpOnlyInput && cmpOnlyInput.checked);
+        var hasFilter = !!(normalizedTerm || selected || hasMin || hasMax || selectedBrands.size > 0 || selectedPromos.size > 0 || onlyCmp);
 
         cards.forEach(function (card) {
           var name = normalizeForSearch(card.dataset.name || '');
@@ -1147,7 +1182,8 @@ window.CotoSorter.vistaLigera = (function () {
             }
           }
 
-          var match = matchName && matchUnit && matchBrand && matchPromo && matchRange;
+          var matchCmp = !onlyCmp || card.dataset.cmpBest === '1';
+          var match = matchName && matchUnit && matchBrand && matchPromo && matchRange && matchCmp;
           card.classList.toggle('hidden', !match);
           if (match) {
             visibleCount++;
@@ -1180,13 +1216,129 @@ window.CotoSorter.vistaLigera = (function () {
       if (brandFilter && brands.length === 0) brandFilter.style.display = 'none';
       if (promoFilter && promos.length === 0) promoFilter.style.display = 'none';
 
-      input.addEventListener('input', function () { filter(input.value, unitSelect.value); });
-      unitSelect.addEventListener('change', function () { filter(input.value, unitSelect.value); });
-      clearBtn.addEventListener('click', function () { input.value = ''; input.focus(); filter('', unitSelect.value); });
-      if (priceMinInput) priceMinInput.addEventListener('input', function () { filter(input.value, unitSelect.value); });
-      if (priceMaxInput) priceMaxInput.addEventListener('input', function () { filter(input.value, unitSelect.value); });
-      if (rangeUseUnit) rangeUseUnit.addEventListener('change', function () { filter(input.value, unitSelect.value); });
-      if (brandOptions) brandOptions.addEventListener('change', function () { filter(input.value, unitSelect.value); });
+      var debounceTimer = null;
+      function applyFilter(save) {
+        filter(input.value, unitSelect.value);
+        if (save !== false) saveState();
+      }
+      function scheduleFilter() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function () { applyFilter(); }, 120);
+      }
+      function sortCards() {
+        var sel = sortSelect ? sortSelect.value : 'default';
+        var mode = (cmpSortBest && cmpSortBest.checked)
+          ? 'best-comp'
+          : (sel === 'default' ? 'orig' : sel);
+        Array.from(document.querySelectorAll('.products-grid')).forEach(function (grid) {
+          var items = Array.from(grid.querySelectorAll('.card-link'));
+          items.sort(function (a, b) {
+            if (mode === 'orig') {
+              return (parseFloat(a.dataset.sortIndex) || 0) - (parseFloat(b.dataset.sortIndex) || 0);
+            }
+            if (mode === 'best-comp') {
+              // $/X recalculado con el precio más bajo de la competencia:
+              // unitPrice * (mejorPrecioCompetencia / precioCoto) = mejorPrecio / cantidad.
+              var au = parseFloat(a.dataset.unitPrice);
+              var bu = parseFloat(b.dataset.unitPrice);
+              var ac = parseFloat(a.dataset.cmpBestPrice);
+              var bc = parseFloat(b.dataset.cmpBestPrice);
+              var apv = parseFloat(a.dataset.price);
+              var bpv = parseFloat(b.dataset.price);
+              var av = (isFinite(au) && isFinite(ac) && isFinite(apv) && apv > 0) ? au * (ac / apv) : Infinity;
+              var bv = (isFinite(bu) && isFinite(bc) && isFinite(bpv) && bpv > 0) ? bu * (bc / bpv) : Infinity;
+              if (av === bv) return 0;
+              return av < bv ? -1 : 1;
+            }
+            if (mode === 'discount') {
+              return (parseFloat(b.dataset.discount) || 0) - (parseFloat(a.dataset.discount) || 0);
+            }
+            if (mode === 'delta') {
+              var av = parseFloat(a.dataset.cmpDelta);
+              var bv = parseFloat(b.dataset.cmpDelta);
+              if (!isFinite(av) && !isFinite(bv)) return 0;
+              if (!isFinite(av)) return 1;
+              if (!isFinite(bv)) return -1;
+              return av - bv;
+            }
+            if (mode === 'price-desc') {
+              return (parseFloat(b.dataset.price) || 0) - (parseFloat(a.dataset.price) || 0);
+            }
+            var au = parseFloat(a.dataset.unitPrice);
+            var bu = parseFloat(b.dataset.unitPrice);
+            if (!isFinite(au) && !isFinite(bu)) return 0;
+            if (!isFinite(au)) return 1;
+            if (!isFinite(bu)) return -1;
+            return au - bu;
+          });
+          items.forEach(function (el) { grid.appendChild(el); });
+        });
+      }
+      function saveState() {
+        try {
+          localStorage.setItem('coto-vl-filters-v1', JSON.stringify({
+            q: input.value,
+            unit: unitSelect ? unitSelect.value : '',
+            min: priceMinInput ? priceMinInput.value : '',
+            max: priceMaxInput ? priceMaxInput.value : '',
+            useUnit: rangeUseUnit ? rangeUseUnit.checked : false,
+            cmp: cmpOnlyInput ? cmpOnlyInput.checked : false,
+            brands: brandOptions ? Array.from(brandOptions.querySelectorAll('input:checked')).map(function (x) { return x.value; }) : [],
+            promos: promoOptions ? Array.from(promoOptions.querySelectorAll('input:checked')).map(function (x) { return x.value; }) : [],
+          }));
+        } catch (e) {}
+      }
+      function setChecked(container, values) {
+        if (!container) return;
+        Array.from(container.querySelectorAll('input[type="checkbox"]')).forEach(function (x) {
+          x.checked = values.indexOf(x.value) >= 0;
+        });
+      }
+      function restoreState() {
+        try {
+          var s = JSON.parse(localStorage.getItem('coto-vl-filters-v1') || 'null');
+          if (!s) return;
+          input.value = s.q || '';
+          if (unitSelect) unitSelect.value = s.unit || '';
+          if (priceMinInput) priceMinInput.value = s.min || '';
+          if (priceMaxInput) priceMaxInput.value = s.max || '';
+          if (rangeUseUnit) rangeUseUnit.checked = !!s.useUnit;
+          if (cmpOnlyInput) cmpOnlyInput.checked = !!s.cmp;
+          setChecked(brandOptions, s.brands || []);
+          setChecked(promoOptions, s.promos || []);
+        } catch (e) {}
+      }
+
+      input.addEventListener('input', scheduleFilter);
+      unitSelect.addEventListener('change', function () { applyFilter(); });
+      clearBtn.addEventListener('click', function () { input.value = ''; input.focus(); applyFilter(); });
+      if (priceMinInput) priceMinInput.addEventListener('input', scheduleFilter);
+      if (priceMaxInput) priceMaxInput.addEventListener('input', scheduleFilter);
+      if (rangeUseUnit) rangeUseUnit.addEventListener('change', function () { applyFilter(); });
+      if (brandOptions) brandOptions.addEventListener('change', function () { applyFilter(); });
+      if (cmpOnlyInput) cmpOnlyInput.addEventListener('change', function () { applyFilter(); });
+      if (cmpSortBest) cmpSortBest.addEventListener('change', function () { sortCards(); saveState(); });
+      if (sortSelect) sortSelect.addEventListener('change', function () { sortCards(); saveState(); });
+
+      document.addEventListener('cmp-updated', function () {
+        if (cmpSortBest && cmpSortBest.checked) sortCards();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        var typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+        if (e.key === '/' && !typing) { e.preventDefault(); input.focus(); }
+        else if (e.key === 'Escape') {
+          if (typing && t.blur) t.blur();
+          input.value = '';
+          applyFilter();
+        }
+      });
+
+      cards.forEach(function (card, idx) { card.dataset.sortIndex = String(idx); });
+
+      restoreState();
+      applyFilter(false);
       if (brandSearchInput) brandSearchInput.addEventListener('input', function () { filter(input.value, unitSelect.value); });
       if (promoOptions) promoOptions.addEventListener('change', function () { filter(input.value, unitSelect.value); });
 
@@ -1256,6 +1408,9 @@ window.CotoSorter.vistaLigera = (function () {
       '    </details>',
       '    </div>',
       printMode ? "" : '    <button class="compare-btn" id="vl-compare-btn" title="Comparar precios con la competencia">Comparar con competencia</button>',
+      printMode ? "" : '    <label class="cmp-toggle" title="Mostrar solo productos donde la competencia es más barata"><input type="checkbox" id="cmp-only">Solo donde gana la competencia</label>',
+      printMode ? "" : '    <select id="sort-select" class="unit-filter" title="Ordenar tarjetas"><option value="default">Ordenar</option><option value="unit">$/X \u2191</option><option value="price-desc">Precio \u2193</option><option value="discount">% descuento</option><option value="delta">Delta competencia</option></select>',
+      printMode ? "" : '    <label class="cmp-toggle" title="Ordenar las tarjetas por el mejor precio entre Carrefour y Día"><input type="checkbox" id="cmp-sort-best">Ordenar por mejor precio de todas las competencias</label>',
       '    <span class="search-count" id="search-count"></span>',
       '    <span class="header-date">' + dateStr + "</span>",
       "  </header>",
@@ -1294,26 +1449,30 @@ window.CotoSorter.vistaLigera = (function () {
     const { groupAndSortProducts } = window.CotoSorter.revista;
     const groups = groupAndSortProducts(products);
 
-    // En Vista Ligera, el orden final debe coincidir con el $/X mostrado en cada card.
-    for (const group of groups) {
-      group.products.sort((a, b) => {
-        if (group.unitType) {
-          const aPrice = resolveDisplayPrices(a).unitPriceValue;
-          const bPrice = resolveDisplayPrices(b).unitPriceValue;
-          const va = Number.isFinite(aPrice) ? aPrice : Infinity;
-          const vb = Number.isFinite(bPrice) ? bPrice : Infinity;
-          return va - vb;
-        }
-
-        const va = Number(a?.activePrice);
-        const vb = Number(b?.activePrice);
-        return (Number.isFinite(va) ? va : Infinity) - (Number.isFinite(vb) ? vb : Infinity);
-      });
-    }
-
     const dateStr = new Date().toLocaleDateString("es-AR", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
+
+    printModeActive = printMode;
+
+    for (const group of groups) {
+      const decorated = group.products.map((p) => {
+        const u = resolveDisplayPrices(p).unitPriceValue;
+        const pr = Number(p?.activePrice);
+        return {
+          p,
+          unit: Number.isFinite(u) ? u : Infinity,
+          price: Number.isFinite(pr) ? pr : Infinity,
+        };
+      });
+      decorated.sort((a, b) => {
+        const av = group.unitType ? a.unit : a.price;
+        const bv = group.unitType ? b.unit : b.price;
+        if (av === bv) return 0;
+        return av < bv ? -1 : 1;
+      });
+      group.products = decorated.map((d) => d.p);
+    }
 
     const sectionsHTML = groups.map(buildGroupHTML).join("\n");
 
@@ -1326,7 +1485,15 @@ window.CotoSorter.vistaLigera = (function () {
     });
 
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    return window.open(URL.createObjectURL(blob), "_blank");
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, "_blank");
+    if (!win) {
+      alert("El navegador bloqueó la pestaña de Vista Ligera. Permití las ventanas emergentes para este sitio y volvé a intentar.");
+      URL.revokeObjectURL(blobUrl);
+      return null;
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    return win;
   }
 
   return { generateRevistaHTML };

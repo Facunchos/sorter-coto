@@ -36,7 +36,7 @@ window.CotoSorter.priceUtils = (function () {
       }
 
       const parts = normalized.split(".");
-      if (parts.length === 2 && parts[1].length === 3) {
+      if (parts.length === 2 && parts[1].length === 3 && parts[0] !== "0" && parts[0] !== "") {
         return parseFloat(parts[0] + parts[1]);
       }
 
@@ -60,7 +60,7 @@ window.CotoSorter.priceUtils = (function () {
     const text = collectPromoText(product);
     if (!text) return null;
 
-    const nxmRegex = /(\d+)\s*x\s*(\d+)/g;
+    const nxmRegex = /(\d{1,2})\s*x\s*(\d{1,2})(?![\d.,]\d)/g;
     let nxmMatch;
     while ((nxmMatch = nxmRegex.exec(text)) !== null) {
       const units = parseInt(nxmMatch[1], 10);

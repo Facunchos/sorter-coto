@@ -29,6 +29,7 @@ window.CotoSorter.priceCompare = (function () {
   let scanPromise = null;
   let port = null;
   let comparing = false;
+  let lastRunAt = 0;
   const itemCache = new Map();
 
   // =========================================================
@@ -102,6 +103,51 @@ window.CotoSorter.priceCompare = (function () {
         byId.set(id, entry);
       }
       entry.els.push(el);
+    });
+    return byId;
+  }
+
+  /** Productos listados en la página (grilla .producto-card): misma tubería que el carrito. */
+  function collectPageItems() {
+    const byId = new Map();
+    document.querySelectorAll(".producto-card").forEach((wrapper, index) => {
+      const productEl = wrapper.querySelector("constructor-result-item, catalogue-product, .card-container") || wrapper;
+      const attrEl = productEl.matches("[data-cnstrc-item-id]") ? productEl : (productEl.querySelector("[data-cnstrc-item-id]") || wrapper);
+
+      let plu = null;
+      wrapper.querySelectorAll("img").forEach((img) => {
+        if (plu) return;
+        plu = pluFromImgSrc(img.src);
+      });
+      const firstImg = wrapper.querySelector("img");
+      const link = wrapper.querySelector("a[title]") || wrapper.querySelector("a");
+      const nameH3 = wrapper.querySelector("h3.nombre-producto");
+
+      const cnstrcId = attrEl.getAttribute("data-cnstrc-item-id");
+      const name = String(attrEl.getAttribute("data-cnstrc-item-name")
+        || (nameH3 ? nameH3.textContent || "" : "")
+        || (firstImg && firstImg.alt ? firstImg.alt : "")
+        || (link && link.getAttribute("title") ? link.getAttribute("title") : "")
+        || (link ? (link.textContent || "").trim() : "")).trim();
+
+      // Sin identidad (ni EAN implícito, ni PLU, ni nombre) no se puede resolver con seguridad.
+      if (!cnstrcId && !plu && !name) return;
+
+      const id = cnstrcId || (plu ? "prod" + plu.padStart(8, "0") : "page-" + index);
+
+      let entry = byId.get(id);
+      if (!entry) {
+        entry = {
+          id,
+          name,
+          regularPrice: parseMoney(attrEl.getAttribute("data-cnstrc-item-price")),
+          qty: 1,
+          els: [],
+          pageMode: true,
+        };
+        byId.set(id, entry);
+      }
+      entry.els.push(wrapper);
     });
     return byId;
   }
@@ -255,9 +301,12 @@ window.CotoSorter.priceCompare = (function () {
       if (el.getAttribute(TILES_ATTR)) return;
       el.setAttribute(TILES_ATTR, "1");
 
-      const anchor = el.querySelector(".precio-anterior") || el.querySelector(".c__item-detail");
+      const host = el.querySelector(".card-container") || el;
+      const anchor = el.querySelector(".precio-anterior")
+        || el.querySelector(".c__item-detail")
+        || host.querySelector(".descuentos-slot");
       const row = document.createElement("div");
-      row.className = "coto-sorter-compare-tiles";
+      row.className = "coto-sorter-compare-tiles" + (item.pageMode ? " coto-sorter-compare-tiles-page" : "");
       row.setAttribute("data-item-id", item.id);
 
       ["carrefour", "dia"].forEach((store) => {
@@ -283,7 +332,7 @@ window.CotoSorter.priceCompare = (function () {
       if (anchor && anchor.parentNode) {
         anchor.parentNode.insertBefore(row, anchor.nextSibling);
       } else {
-        el.appendChild(row);
+        host.appendChild(row);
       }
     });
   }
@@ -293,10 +342,19 @@ window.CotoSorter.priceCompare = (function () {
     if (!item) return;
     const baseline = item.resolved ? item.resolved.finalPrice : null;
 
+    const tiles = [];
     item.els.forEach((el) => {
       const tile = el.querySelector(`.coto-sorter-tile[data-store="${store}"]`);
-      if (!tile) return;
+      if (tile) tiles.push(tile);
+    });
+    // Fallback: Angular puede haber re-renderizado las cards y los elems quedaron viejos.
+    if (!tiles.length) {
+      document
+        .querySelectorAll(`.coto-sorter-compare-tiles[data-item-id="${productId}"] .coto-sorter-tile[data-store="${store}"]`)
+        .forEach((tile) => tiles.push(tile));
+    }
 
+    tiles.forEach((tile) => {
       const priceEl = tile.querySelector(".coto-sorter-tile-price");
       tile.classList.remove("coto-sorter-tile-pending");
 
@@ -351,44 +409,80 @@ window.CotoSorter.priceCompare = (function () {
   }
 
   // =========================================================
-  // Progress + notices
+  // Streaming: los resultados se pintan a medida que llegan
   // =========================================================
 
-  function ensureProgressBar() {
-    let bar = document.querySelector(".coto-sorter-cart-progress");
-    if (bar) return bar;
+  const flushQueue = [];
+  let flushTimer = null;
+  let flushesInFlight = 0;
+  const queuedThisRun = new Set();
 
-    const host = document.querySelector("shopping-cart-main") || document.querySelector("div.card-body-container") || document.body;
-    bar = document.createElement("div");
-    bar.className = "coto-sorter-cart-progress";
-
-    const text = document.createElement("span");
-    text.className = "coto-sorter-progress-text";
-    text.textContent = "Preparando...";
-
-    const wrap = document.createElement("div");
-    wrap.className = "coto-sorter-progress-bar-wrap";
-    const fill = document.createElement("div");
-    fill.className = "coto-sorter-progress-bar";
-    wrap.appendChild(fill);
-
-    bar.appendChild(text);
-    bar.appendChild(wrap);
-    host.insertBefore(bar, host.firstChild);
-    return bar;
+  function queueCompare(item) {
+    if (!item.resolved || !item.resolved.ean) return;
+    if (queuedThisRun.has(item.id)) return;
+    queuedThisRun.add(item.id);
+    flushQueue.push({ id: item.id, ean: item.resolved.ean });
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      const items = flushQueue.splice(0, flushQueue.length);
+      if (items.length) flushCompare(items);
+    }, 250);
   }
 
-  function updateCartProgress(text, pct) {
-    const bar = ensureProgressBar();
-    const textEl = bar.querySelector(".coto-sorter-progress-text");
-    const barEl = bar.querySelector(".coto-sorter-progress-bar");
-    if (text === null) {
-      bar.classList.remove("coto-sorter-progress-active");
+  function flushCompare(items) {
+    let fp = null;
+    try {
+      fp = chrome.runtime.connect({ name: "compare" });
+    } catch (err) {
+      debugLog("priceCompare: flush connect failed", err);
+      showNotice("Se perdió la conexión con la extensión — recargá la página y volvé a intentar");
       return;
     }
-    bar.classList.add("coto-sorter-progress-active");
-    if (textEl) textEl.textContent = text;
-    if (barEl) barEl.style.width = Math.round(pct) + "%";
+
+    flushesInFlight++;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      flushesInFlight--;
+      try { fp.disconnect(); } catch { /* ignore */ }
+      settleComparison();
+    };
+
+    fp.onMessage.addListener((msg) => {
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "result") {
+        applyResult(msg.productId, msg.store, msg.data);
+      } else if (msg.type === "batch-done") {
+        finish();
+      } else if (msg.type === "need-permission") {
+        showNotice("Necesitamos tu permiso para consultar Carrefour y Día...");
+        try {
+          fp.postMessage({ type: "request-permission", items });
+        } catch {
+          finish();
+        }
+      } else if (msg.type === "permission" && !msg.granted) {
+        showNotice("Sin permiso — no se pudo comparar");
+        finish();
+      }
+    });
+    fp.onDisconnect.addListener(() => {
+      finish();
+    });
+    try {
+      fp.postMessage({ type: "compare", items });
+    } catch (err) {
+      finish();
+    }
+  }
+
+  function settleComparison() {
+    if (flushesInFlight > 0 || flushTimer || flushQueue.length || scanPromise) return;
+    if (!comparing) return;
+    comparing = false;
+    markStuckTiles();
   }
 
   function showNotice(text) {
@@ -414,8 +508,7 @@ window.CotoSorter.priceCompare = (function () {
       if (comparing) {
         comparing = false;
         markStuckTiles();
-        updateCartProgress("No se pudo conectar — recargá la página y probá de nuevo", 100);
-        setTimeout(() => updateCartProgress(null), 2500);
+        showNotice("No se pudo conectar — recargá la página y probá de nuevo");
       }
     }
   }
@@ -425,48 +518,19 @@ window.CotoSorter.priceCompare = (function () {
       port = chrome.runtime.connect({ name: "compare" });
       port.onMessage.addListener((msg) => {
         if (!msg || typeof msg !== "object") return;
-
         if (msg.type === "result") {
           applyResult(msg.productId, msg.store, msg.data);
         } else if (msg.type === "batch-done") {
-          comparing = false;
-          markStuckTiles();
-          updateCartProgress("Comparación lista", 100);
-          setTimeout(() => updateCartProgress(null), 1200);
-        } else if (msg.type === "need-permission") {
-          updateCartProgress("Necesitamos tu permiso para consultar Carrefour y Día...", 10);
-          sendMessage({ type: "request-permission", items: comparisonItems() });
-        } else if (msg.type === "permission") {
-          if (!msg.granted) {
-            comparing = false;
-            markStuckTiles();
-            updateCartProgress("Sin permiso — no se pudo comparar", 100);
-            setTimeout(() => updateCartProgress(null), 1800);
-          }
+          settleComparison();
         }
       });
       port.onDisconnect.addListener(() => {
         port = null;
-        if (comparing) {
-          comparing = false;
-          updateCartProgress("Conexión perdida — volvé a apretar el botón", 100);
-          setTimeout(() => updateCartProgress(null), 2000);
-        }
       });
     } catch (err) {
       debugLog("priceCompare: connect failed", err);
       port = null;
     }
-  }
-
-  function comparisonItems() {
-    const items = [];
-    itemCache.forEach((item) => {
-      if (item.resolved && item.resolved.ean) {
-        items.push({ id: item.id, ean: item.resolved.ean });
-      }
-    });
-    return items;
   }
 
   // =========================================================
@@ -498,6 +562,7 @@ window.CotoSorter.priceCompare = (function () {
         });
 
         renderTotals();
+        itemCache.forEach((item) => ensureTiles(item));
 
         const pending = [];
         itemCache.forEach((item) => {
@@ -509,6 +574,7 @@ window.CotoSorter.priceCompare = (function () {
                 item.failed = !(resolved && resolved.finalPrice !== null);
                 item.resolving = false;
                 renderRealPrice(item);
+                queueCompare(item);
               })
             );
           }
@@ -526,28 +592,75 @@ window.CotoSorter.priceCompare = (function () {
     return scanPromise;
   }
 
+  async function scanPage() {
+    if (scanPromise) return scanPromise;
+
+    scanPromise = (async () => {
+      try {
+        const byId = collectPageItems();
+
+        itemCache.forEach((item, id) => {
+          if (!byId.has(id)) itemCache.delete(id);
+        });
+
+        byId.forEach((item, id) => {
+          const cached = itemCache.get(id);
+          if (cached) {
+            cached.els = item.els;
+          } else {
+            itemCache.set(id, item);
+          }
+        });
+        itemCache.forEach((item) => ensureTiles(item));
+
+        const pending = [];
+        itemCache.forEach((item) => {
+          if (!item.resolved && !item.resolving && !item.failed) {
+            item.resolving = true;
+            pending.push(
+              resolveItemData(item).then((resolved) => {
+                item.resolved = resolved;
+                item.failed = !(resolved && resolved.finalPrice !== null);
+                item.resolving = false;
+                queueCompare(item);
+              })
+            );
+          }
+        });
+
+        if (pending.length) await Promise.allSettled(pending);
+      } finally {
+        scanPromise = null;
+      }
+    })();
+
+    return scanPromise;
+  }
+
   function startComparison() {
-    if (!isCartPage()) {
-      showNotice("Abrí el carrito para comparar precios");
+    const mode = isCartPage()
+      ? "cart"
+      : (document.querySelector(".producto-card") ? "page" : null);
+    if (!mode) {
+      showNotice("No hay productos para comparar en esta página");
       return;
     }
     if (comparing) return;
+    if (Date.now() - lastRunAt < 1000) return;
     comparing = true;
+    lastRunAt = Date.now();
 
-    updateCartProgress("Preparando comparación...", 5);
-    scanCart().then(() => {
-      itemCache.forEach((item) => ensureTiles(item));
-      const items = comparisonItems();
-      if (!items.length) {
-        comparing = false;
-        markStuckTiles();
-        updateCartProgress("No se pudieron resolver los productos del carrito", 100);
-        setTimeout(() => updateCartProgress(null), 2200);
-        return;
-      }
-      updateCartProgress(`Comparando ${items.length} productos...`, 15);
-      if (!port) connectBackground();
-      sendMessage({ type: "compare", items });
+    // Cada click es una corrida completa: reintenta los fallidos y vuelve a
+    // enviar los resueltos (el cache de bg los devuelve al instante).
+    queuedThisRun.clear();
+    itemCache.forEach((item) => {
+      if (!item.resolved) item.failed = false;
+    });
+
+    const scanned = mode === "cart" ? scanCart() : scanPage();
+    scanned.then(() => {
+      itemCache.forEach((item) => queueCompare(item));
+      settleComparison();
     });
   }
 
