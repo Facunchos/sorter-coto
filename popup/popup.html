@@ -33,14 +33,16 @@
       justify-content: space-between;
       padding: 10px 0;
       border-top: 1px solid #eee;
+      cursor: pointer;
     }
-    .setting label {
+    .setting-label {
       font-size: 13px;
       color: #333;
       cursor: pointer;
     }
     .toggle {
       position: relative;
+      display: inline-block;
       width: 40px;
       height: 22px;
     }
@@ -91,21 +93,21 @@
 <body>
   <h1><span>🏷️</span> Coto Sorter</h1>
 
-  <div class="setting">
-    <label for="debug-toggle">Modo Debug</label>
-    <div class="toggle">
+  <label class="setting">
+    <span class="setting-label">Modo Debug</span>
+    <span class="toggle">
       <input type="checkbox" id="debug-toggle">
       <span class="slider"></span>
-    </div>
-  </div>
+    </span>
+  </label>
 
-  <div class="setting">
-    <label for="extras-toggle">Extras</label>
-    <div class="toggle">
+  <label class="setting">
+    <span class="setting-label">Extras</span>
+    <span class="toggle">
       <input type="checkbox" id="extras-toggle">
       <span class="slider"></span>
-    </div>
-  </div>
+    </span>
+  </label>
 
   <div class="info">
     Ordena productos de Coto Digital por precio real por unidad (kg/L), ajustado por descuentos y promos.

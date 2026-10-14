@@ -125,13 +125,16 @@ window.CotoSorter.revista = (function () {
       debugLog("Starting Revista HTML generation...");
       updateProgressFn("Consultando API de COTO...", 5);
 
+      const comparePrep = window.CotoSorter.comparePrep;
+      if (comparePrep) comparePrep.start();
+
       let allProducts = await scrapeAllPages((loaded, total) => {
         const pct = total > 0 ? Math.min((loaded / total) * 80, 80) : 10;
         const label = total > 0
           ? `Obteniendo productos (${loaded}/${total})...`
           : "Obteniendo productos...";
         updateProgressFn(label, pct);
-      });
+      }, comparePrep ? (batch) => comparePrep.offerProducts(batch) : null);
 
       if (allProducts.length === 0) {
         updateProgressFn(null, 0);
@@ -144,8 +147,11 @@ window.CotoSorter.revista = (function () {
         debugLog(`Limited to first ${maxCount} products`);
       }
 
+      if (comparePrep) comparePrep.noteScrapeDone();
+
       updateProgressFn("Generando vista HTML...", 90);
-      window.CotoSorter.vistaLigera.generateRevistaHTML(allProducts);
+      const vistaWin = window.CotoSorter.vistaLigera.generateRevistaHTML(allProducts);
+      if (comparePrep) comparePrep.attachWindow(vistaWin);
 
       updateProgressFn("✓ Vista abierta en nueva pestaña", 100);
       setTimeout(() => updateProgressFn(null, 0), 3000);

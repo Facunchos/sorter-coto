@@ -20,9 +20,9 @@ const STORES = [
 ];
 
 const CFG = {
-  globalConcurrency: 4,
-  perDomainConcurrency: 2,
-  perDomainSpacingMs: 300,
+  globalConcurrency: 6,
+  perDomainConcurrency: 3,
+  perDomainSpacingMs: 200,
   timeoutMs: 10000,
   retries: 2,
   breakerFailures: 5,
@@ -142,11 +142,16 @@ async function fetchJson(url) {
 // VTEX adapter (Carrefour, Día)
 // =========================================================
 
+function normalizeEan(value) {
+  return String(value === null || value === undefined ? "" : value).trim().replace(/^0+/, "");
+}
+
 function sameEan(value, ean) {
   if (value === undefined || value === null) return false;
-  const target = String(ean).trim();
-  if (Array.isArray(value)) return value.some((v) => String(v).trim() === target);
-  return String(value).trim() === target;
+  const target = normalizeEan(ean);
+  if (!target) return false;
+  if (Array.isArray(value)) return value.some((v) => normalizeEan(v) === target);
+  return normalizeEan(value) === target;
 }
 
 function pickOffer(item) {
@@ -290,6 +295,54 @@ async function lookupVtex(store, ean) {
   return parseVtexProduct(products[0], ean, store.origin);
 }
 
+const EAN_CHUNK = 10;
+
+function productMatchesEan(product, ean) {
+  if (sameEan(product.ean, ean)) return true;
+  const items = Array.isArray(product.items) ? product.items : [];
+  return items.some(
+    (it) => sameEan(it.ean, ean) || sameEan(it.alternateIds && it.alternateIds.Ean, ean)
+  );
+}
+
+// Batch por EANs: una query con fq repetido (una por EAN). Verificado contra las
+// APIs reales: el OR por coma ("a,b") NO funciona en estos stores, pero fq repetido sí.
+async function lookupVtexBatch(store, eans) {
+  const list = eans.map(String);
+  const out = {};
+  if (!list.length) return out;
+  if (list.length === 1) {
+    out[list[0]] = await lookupVtex(store, list[0]);
+    return out;
+  }
+
+  let products = [];
+  try {
+    const fq = list.map((e) => "fq=alternateIds_Ean:" + encodeURIComponent(e)).join("&");
+    const res = await fetchJson(`${store.origin}/api/catalog_system/pub/products/search/?${fq}`);
+    if (res.ok && Array.isArray(res.json)) products = res.json;
+  } catch { /* cae al fallback individual */ }
+
+  const used = new Set();
+  for (const ean of list) {
+    const idx = products.findIndex((p, i) => !used.has(i) && productMatchesEan(p, ean));
+    if (idx >= 0) {
+      used.add(idx);
+      out[ean] = parseVtexProduct(products[idx], ean, store.origin);
+    }
+  }
+
+  // Fallback: una query por EAN (formato probado) para lo que haya quedado.
+  for (const ean of list.filter((e) => !out[e])) {
+    try {
+      out[ean] = await lookupVtex(store, ean);
+    } catch {
+      out[ean] = { status: "error" };
+    }
+  }
+  return out;
+}
+
 // =========================================================
 // Batch handling per connected tab
 // =========================================================
@@ -298,23 +351,27 @@ function cacheKey(storeKey, ean) {
   return `cmp:${storeKey}:${String(ean)}`;
 }
 
-async function runLookup(port, batch, item, store) {
+async function runChunkLookup(port, batch, items, store) {
   if (batch.aborted) return;
   try {
-    const data = await lookupVtex(store, item.ean);
-    if (batch.aborted) return;
-
-    safePost(port, { type: "result", productId: item.id, store: store.key, data });
-    if (data.status === "ok") {
-      try {
-        await chrome.storage.session.set({
-          [cacheKey(store.key, item.ean)]: { at: Date.now(), data },
-        });
-      } catch { /* cache is best-effort */ }
+    const results = await lookupVtexBatch(store, items.map((it) => it.ean));
+    for (const item of items) {
+      if (batch.aborted) return;
+      const data = results[String(item.ean)] || { status: "error" };
+      safePost(port, { type: "result", productId: item.id, store: store.key, data });
+      if (data.status === "ok") {
+        try {
+          await chrome.storage.session.set({
+            [cacheKey(store.key, item.ean)]: { at: Date.now(), data },
+          });
+        } catch { /* cache is best-effort */ }
+      }
     }
   } catch (err) {
     if (!batch.aborted) {
-      safePost(port, { type: "result", productId: item.id, store: store.key, data: { status: "error" } });
+      for (const item of items) {
+        safePost(port, { type: "result", productId: item.id, store: store.key, data: { status: "error" } });
+      }
     }
   } finally {
     batch.pending--;
@@ -331,15 +388,20 @@ async function startBatch(port, batch, items) {
   } catch { /* ignore */ }
 
   const now = Date.now();
-  for (const item of items) {
-    for (const store of STORES) {
+  for (const store of STORES) {
+    const missing = [];
+    for (const item of items) {
       const entry = cached[cacheKey(store.key, item.ean)];
       if (entry && entry.data && now - entry.at < CFG.cacheTtlMs) {
         safePost(port, { type: "result", productId: item.id, store: store.key, data: entry.data });
-        continue;
+      } else {
+        missing.push(item);
       }
+    }
+    for (let i = 0; i < missing.length; i += EAN_CHUNK) {
+      const chunk = missing.slice(i, i + EAN_CHUNK);
       batch.pending++;
-      enqueue(new URL(store.origin).host, () => runLookup(port, batch, item, store));
+      enqueue(new URL(store.origin).host, () => runChunkLookup(port, batch, chunk, store));
     }
   }
 

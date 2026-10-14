@@ -43,12 +43,36 @@ Competitors (MVP): **Carrefour** + **Día**. Vea/Jumbo deferred (sucursal-depend
 4. Tile click → `bg.js` validates the URL (https + host allowlist) → `tabs.create` opens the
    competitor PDP (`product.link` from the VTEX API — never the `/EAN` URL, those are search pages).
 
+## Vista Ligera comparison (live relay, no blocking)
+
+The VL page is a `blob:` document without `chrome.runtime`, but it is **same-origin with the opener
+tab**, so the content script drives everything directly through `vlWindow.document` (no inline
+scripts in the VL page → no CSP risk):
+
+1. "Generar Vista Ligera" starts the EAN+competitor prefetch immediately (pipelined per scrape
+   batch) — the VL **opens without waiting** for comparison results.
+2. Cards render placeholder compare rows (`data-cmp-id` on the row, `data-store` on each tile) plus
+   a header button **"Comparar con competencia"** (`#vl-compare-btn`, hidden in print/PDF mode).
+3. `comparePrep` streams batches through `bg.js` (one Port per flush) and paints each result into
+   the VL DOM as it arrives: "Precio real" line, green/red tiles vs that price, yellow promo chip,
+   click-through to the competitor PDP.
+4. The button re-runs the comparison on demand (bg's 30-min cache makes repeats near-instant) and
+   reflects state ("Comparando…" / "Comparado ✓" / "Sin datos para comparar").
+
 ## Competitor adapters (VTEX)
 
 `GET {host}/api/catalog_system/pub/products/search/?fq=alternateIds_Ean:{ean}` →
 `items[].sellers[0].commertialOffer.{Price,ListPrice,PriceWithoutDiscount,IsAvailable}` + `Teasers`
 (+ `discountHighlights`). ListPrice is unreliable as "list" — a missing/discounted price falls back
 through `PriceWithoutDiscount`.
+
+**Batching (verified against the live APIs):** up to 10 EANs per request using **repeated** `fq`
+params (`?fq=alternateIds_Ean:e1&fq=alternateIds_Ean:e2&…`). The comma-OR form
+(`fq=alternateIds_Ean:e1,e2`) does **not** work on these stores (returns a single product) and must
+not be used. EAN matching normalizes leading zeros (live data returns GTIN-14 like
+`07799155000197`; `product.ean` is often undefined — the EAN lives in `items[].ean`). Any EAN the
+batch misses is retried with the single-EAN query (the proven 4.1.1 shape), so batching is an
+optimization and never a correctness dependency.
 
 **Promo math** (the stores disagree on what they display, so we compute an effective unit price):
 
@@ -66,7 +90,7 @@ Promo sources: `product.discountHighlights[].name` + all short strings inside `o
 
 ## Fetch policy (`bg.js`)
 
-Pool: global concurrency **4**, per-domain **2** + 300 ms spacing, 10 s timeout (AbortController),
+Pool: global concurrency **6**, per-domain **3** + 200 ms spacing, 10 s timeout (AbortController),
 2 retries with backoff + jitter (network/429/5xx, honors Retry-After), circuit breaker after 5
 consecutive failures per domain (60 s), `credentials:"omit"`, `cache:"no-store"`. Successful
 results cached in `chrome.storage.session` for 30 min (re-clicks are instant). A fresh batch

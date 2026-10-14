@@ -73,6 +73,11 @@ window.CotoSorter.priceCompare = (function () {
     return m ? String(parseInt(m[1], 10)) : null;
   }
 
+  function pluFromImgSrc(url) {
+    const m = String(url || "").match(/\/(\d{8})\.(?:jpg|jpeg|png|webp)(?:\?|$)/i);
+    return m ? String(parseInt(m[1], 10)) : null;
+  }
+
   // =========================================================
   // Cart DOM
   // =========================================================
@@ -575,5 +580,5 @@ window.CotoSorter.priceCompare = (function () {
     );
   }
 
-  return { init, isCartPage, startComparison, showNotice };
+  return { init, isCartPage, startComparison, showNotice, resolveItemData, pluFromId, pluFromImgSrc, formatMoney, parseMoney };
 })();

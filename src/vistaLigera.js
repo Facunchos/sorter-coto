@@ -9,6 +9,41 @@ window.CotoSorter.vistaLigera = (function () {
 
   // ---- Helpers de construcción HTML ----
 
+  function buildCompareHTML(p) {
+    const c = p && p.compare;
+    const cmpId = p && p.__cmpId;
+    if (!c && !cmpId) return "";
+
+    const idAttr = cmpId ? ` data-cmp-id="${escapeHtmlAttr(cmpId)}"` : "";
+
+    const realRow = c && c.realText
+      ? `<div class="compare-real">Precio real: ${c.realText}` +
+        (c.realPromo ? ` <span class="compare-promo">${escapeHtmlAttr(c.realPromo)}</span>` : "") +
+        `</div>`
+      : `<div class="compare-real"></div>`;
+
+    const tiles = ["carrefour", "dia"].map((key) => {
+      const t = (c && c.tiles && c.tiles[key]) || { status: "pending" };
+      const label = key === "carrefour" ? "Carrefour" : "Día";
+      const nameCls = key === "carrefour" ? "compare-tile-name-carrefour" : "compare-tile-name-dia";
+      const nameHTML = `<span class="compare-tile-name ${nameCls}">${label}</span>`;
+      const storeAttr = ` data-store="${key}"`;
+
+      if (t.status !== "ok") {
+        const naText = t.status === "pending" ? "…" : "sin datos";
+        return `<span class="compare-tile compare-tile-na"${storeAttr}>${nameHTML}<span class="compare-tile-price">${naText}</span></span>`;
+      }
+
+      const cls = t.lower === null ? "" : t.lower ? " compare-tile-lower" : " compare-tile-higher";
+      const urlAttr = t.url ? ` data-url="${escapeHtmlAttr(t.url)}"` : "";
+      const clickable = t.url ? ` onclick="window.open(this.dataset.url,'_blank')"` : "";
+      const promo = t.promo ? `<span class="compare-promo">${escapeHtmlAttr(t.promo)}</span>` : "";
+      return `<span class="compare-tile${cls}"${storeAttr}${urlAttr}${clickable}>${nameHTML}<span class="compare-tile-price">${t.text}</span>${promo}</span>`;
+    }).join("");
+
+    return `<div class="compare-row"${idAttr}>${realRow}<div class="compare-tiles">${tiles}</div></div>`;
+  }
+
   function buildCardHTML(p, groupUnitType) {
     const safeName = (p.name || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     const safeUnitType = (p.unitType || groupUnitType || "").toString();
@@ -52,6 +87,8 @@ window.CotoSorter.vistaLigera = (function () {
       p.href ? `href="${p.href}" target="_blank"` : "",
     ].filter(Boolean).join(" ");
 
+    const compareHTML = buildCompareHTML(p);
+
     return `<${tag} ${attrs}>
   <div class="card${isDobleHoja ? " card-doble-hoja" : ""}">
     <div class="card-img">${imgTag}</div>
@@ -62,6 +99,7 @@ window.CotoSorter.vistaLigera = (function () {
       ${discountRow}
       ${badgesHTML}
       ${unitPriceHTML}
+      ${compareHTML}
     </div>
   </div>
 </${tag}>`;
@@ -516,7 +554,7 @@ window.CotoSorter.vistaLigera = (function () {
       padding: 18px 20px;
       overflow: hidden;
       transition: max-height var(--motion-mid) var(--motion-ease), padding var(--motion-mid) var(--motion-ease);
-      max-height: 9999px;
+      max-height: 999999px;
     }
 
     .group.collapsed .products-grid {
@@ -650,6 +688,100 @@ window.CotoSorter.vistaLigera = (function () {
       background: var(--accent-green-soft);
       border: 1px solid #c8ead7;
     }
+
+    .compare-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .compare-real {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-green, #2e7d32);
+    }
+
+    .compare-tiles {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .compare-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 74px;
+      padding: 4px 6px;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      background: #fafafa;
+      cursor: default;
+      color: inherit;
+    }
+
+    .compare-tile-name {
+      font-size: 9px;
+      font-weight: 700;
+      color: #fff;
+      border-radius: 3px;
+      padding: 1px 6px;
+    }
+
+    .compare-tile-name-carrefour { background: #0b4ea2; }
+    .compare-tile-name-dia { background: #e20018; }
+
+    .compare-tile-price {
+      font-size: 12px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .compare-tile-lower {
+      border-color: #2e7d32;
+      background: #eafaef;
+      cursor: pointer;
+    }
+
+    .compare-tile-lower .compare-tile-price { color: #2e7d32; }
+
+    .compare-tile-higher {
+      border-color: #e20025;
+      background: #fdeef0;
+      cursor: pointer;
+    }
+
+    .compare-tile-higher .compare-tile-price { color: #e20025; }
+
+    .compare-tile-na .compare-tile-price {
+      color: #999;
+      font-weight: 500;
+    }
+
+    .compare-promo {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: #f7c948;
+      color: #333;
+    }
+
+    .compare-btn {
+      border: none;
+      border-radius: 8px;
+      background: #e20025;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .compare-btn:hover { background: #b8001d; }
 
     @keyframes cardEnter {
       from { opacity: 0; transform: translateY(6px); }
@@ -1123,6 +1255,7 @@ window.CotoSorter.vistaLigera = (function () {
       '      </div>',
       '    </details>',
       '    </div>',
+      printMode ? "" : '    <button class="compare-btn" id="vl-compare-btn" title="Comparar precios con la competencia">Comparar con competencia</button>',
       '    <span class="search-count" id="search-count"></span>',
       '    <span class="header-date">' + dateStr + "</span>",
       "  </header>",
@@ -1193,7 +1326,7 @@ window.CotoSorter.vistaLigera = (function () {
     });
 
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    window.open(URL.createObjectURL(blob), "_blank");
+    return window.open(URL.createObjectURL(blob), "_blank");
   }
 
   return { generateRevistaHTML };

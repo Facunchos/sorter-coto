@@ -610,7 +610,7 @@ window.CotoSorter.api = (function () {
   }
 
   /** Scraping paginado usando Endeca legado. */
-  async function scrapeViaEndeca(progressCallback) {
+  async function scrapeViaEndeca(progressCallback, onBatch) {
     debugLog("Fetching first batch from Endeca JSON API...");
     const firstUrl = buildEndecaApiUrl(0, ENDeca_BATCH);
     debugLog(`Endeca URL: ${firstUrl}`);
@@ -628,6 +628,7 @@ window.CotoSorter.api = (function () {
     if (progressCallback) progressCallback(0, totalNumRecs);
 
     const allProducts = extractProductsFromResultsList(resultsList);
+    if (onBatch) onBatch(allProducts.slice());
     if (progressCallback) progressCallback(allProducts.length, totalNumRecs);
 
     const remainingOffsets = [];
@@ -648,7 +649,10 @@ window.CotoSorter.api = (function () {
         })
       );
 
-      for (const batch of results) allProducts.push(...batch);
+      for (const batch of results) {
+        allProducts.push(...batch);
+        if (onBatch) onBatch(batch);
+      }
       if (progressCallback) progressCallback(allProducts.length, totalNumRecs);
     }
 
@@ -657,7 +661,7 @@ window.CotoSorter.api = (function () {
   }
 
   /** Scraping paginado usando endpoint BFF auto-detectado. */
-  async function scrapeViaBff(progressCallback) {
+  async function scrapeViaBff(progressCallback, onBatch) {
     refreshCapturedUrls();
 
     let baseUrl = capturedBffUrl || findBffUrlInPerformance();
@@ -694,6 +698,7 @@ window.CotoSorter.api = (function () {
     if (progressCallback) progressCallback(0, totalNumRecs);
 
     const allProducts = extractProductsFromBffResponse(firstData);
+    if (onBatch) onBatch(allProducts.slice());
     if (progressCallback) progressCallback(allProducts.length, totalNumRecs);
 
     const pages = [];
@@ -715,7 +720,10 @@ window.CotoSorter.api = (function () {
         })
       );
 
-      for (const batch of results) allProducts.push(...batch);
+      for (const batch of results) {
+        allProducts.push(...batch);
+        if (onBatch) onBatch(batch);
+      }
       if (progressCallback) progressCallback(Math.min(allProducts.length, totalNumRecs), totalNumRecs);
     }
 
@@ -729,14 +737,14 @@ window.CotoSorter.api = (function () {
    * 2) Si falla (o no hay Category_ResultsList), detecta XHR BFF y pagina por template.
    * @param {Function} progressCallback — (loaded, total) => void
    */
-  async function scrapeAllPages(progressCallback) {
+  async function scrapeAllPages(progressCallback, onBatch) {
     try {
-      return await scrapeViaEndeca(progressCallback);
+      return await scrapeViaEndeca(progressCallback, onBatch);
     } catch (endecaErr) {
       debugLog("Endeca fallback triggered:", endecaErr?.message || endecaErr);
     }
 
-    return scrapeViaBff(progressCallback);
+    return scrapeViaBff(progressCallback, onBatch);
   }
 
   return { setupApiUrlCapture, scrapeAllPages };
